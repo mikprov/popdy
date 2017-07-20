@@ -5,26 +5,79 @@ date: "July 19, 2017"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+Get my packages:
+```{r}
+library(ggplot2)
+library(tidyr)
 ```
 
-## R Markdown
+Here I simulate population size over time given survivals at age and variability in recruitment.
+```{r}
+#1a) Parameters, No Fishing
+a=60 
+b=0.00017 
+tf=2000 #Number of time steps
+N0=c(100,0,0,0,0) #Initial pop vector, start with 100 recruits
+s=0.85 #No fishing 
+e=0.1056 #Proportion of early spawners
+l=0.1056 #Proportion age class 4 fish that spawn late (age 5)
+sx=c(s,s,(s*(1-e)),(s*(l))) #Survival vector
+t<-1
+ncls = length(N0) #Number of age classes
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+#1b)  Simulation with random variability in recruitment for No Hatchery, No Fishing
+AgeStructMatrix = function(sx,a,b,tf,N0) { 
+  sig_r=0.3 #Sigma multiplies variability term
+  set.seed(1) #Set the seed so that every simulation uses same random sequence
+  Nt = matrix(0,tf,ncls+2) #Initialize vector of population sizes with extra columns for spawners and recruitment before variability
+  Nt[1,] = c(0,0,N0) #Put in initial values
+	for(t in 1:(tf-1)) {
+		Pt= (e*Nt[t,5])+((1-l)*Nt[t,6])+Nt[t,7] #Number spawners
+    Nt[t+1,1]=Pt #Put number of spawners into column 1
+    Nt[t+1,2]=((a*Pt)/(1+(b*Pt))) #Put number of recruits before variability into column 2
+		Nt[t+1,3] = (Nt[t+1,2])*(exp(sig_r*rnorm(1,mean=0, sd=1))) #Recruits after variability in column 3, rnorm to generate random number for 1 point (n=1)
+    Nt[t+1,4:(ncls+2)] = sx*Nt[t,3:(ncls+2-1)] #Survivorship of each age class	in columns 4-7
+    }
+  return(Nt)
+	}
+   
+#Call the function for No Hatchery, No Fishing
+Nt=AgeStructMatrix(sx,a,b,tf,N0) 
+plot(Nt)
 ```
 
-## Including Plots
+OK, now let's try simulating population size when there is fishing.
+```{r }
+#2a) New Parameters for No Hatchery, Fishing
+a=60 
+b=0.00017 
+tf=2000
+N0=c(100,0,0,0,0) 
+s=0.28
+e=0.1056 
+l=0.1056
+sx=c(s,s,(s*(1-e)),(s*(l)))
+t<-1
 
-You can also embed plots, for example:
+#2b) Simulation with random variability in recruitment for No Hatchery, Fishing 
+AgeStructMatrix_F = function(sx,a,b,tf,N0) { 
+  set.seed(1)
+  sig_r=0.3
+  Nt_F= matrix(0,tf,ncls+2) 
+  Nt_F[1,] = c(0,0,N0) 
+  for(t in 1:(tf-1)) {
+    Pt= (e*Nt_F[t,5])+((1-l)*Nt_F[t,6])+Nt_F[t,7] 
+    Nt_F[t+1,1] = Pt 
+    Nt_F[t+1,2] = (a*Pt)/(1+(b*Pt)) 
+    Nt_F[t+1,3] = (Nt_F[t+1,2])*(exp(sig_r*rnorm(1,mean=0, sd=1))) 
+    Nt_F[t+1,4:(ncls+2)] = sx*Nt_F[t,3:(ncls+2-1)] 
+  }
+  return(Nt_F)
+}
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+#sample run
+Nt_F=AgeStructMatrix_F(sx,a,b,tf,N0) 
+plot(Nt_F)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
