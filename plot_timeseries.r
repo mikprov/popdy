@@ -1,9 +1,16 @@
+# Plot timeseries
+# by: Mikaela Provost
+# on: 2017-8-16
+
+# ---
+# goals:
+# ---
+# 1. plot egg production for multiple harvest levels
 
 
-par(mfrow = c(2,1))#, mar = c(5, 4, 4, 2) + 0.3)
-
+# 1. plot egg production for multiple harvest levels
 # with multiple harvest levels
-for(i in 1:length(output)) output[[i]]$eggs = log(output[[i]]$eggs)
+for(i in 1:length(output)) output[[i]]$eggs = log(output[[i]]$eggs) # take log of eggs
 # plot egg production sensitivity for all fishing levels for a short window at end of simulation
 plot(output[[length(output)]]$eggs[(time-100):time], type = "n", 
      main = "FORCING RECRUITMENT",
@@ -22,6 +29,7 @@ for(i in 1:(length(output))) {
 for(i in 1:length(output)) output[[i]]$catch = log(output[[i]]$catch)
 plot(output[[length(output)]]$catch[(time-100):time], type = "n", 
      #ylim = c(min(output[[length(output)]]$catch[(time-100):time]), max(output[[2]]$catch[(time-100):time])),
+     main = "Forcing Recruitment",
      ylim = c(21.25, 28.5),
      ylab = "Catch (kg)",
      xlab = "Time (yr)")
@@ -29,7 +37,7 @@ mtext(letters[2], side = 3, line = -1, adj = 0.9, cex = 0.8)
 for(i in 2:(length(output))) {
   lines(output[[i]]$catch[(time-100):time], col = colorRampPalette(c("blue", "red"))(length(output))[i])
 }
-par(mfrow = c(1,1))
+
 
 
 
