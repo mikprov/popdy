@@ -40,7 +40,7 @@ legend("center",
        xpd = TRUE,
        lwd = 2, col = c(colorRampPalette(c("blue", "red"))(length(output))), title = "Exploitation Rate F")
 
-
+# ------------ code below needs to be fixed ---------------- #
 # plot egg production sensitivity for all fishing levels
 low_f = spec.pgram(output[[1]][[1]]$eggs, spans = c(m,m), plot = FALSE)
 high_f = spec.pgram(output[[length(output)]][[1]]$eggs, spans = c(m,m), plot = FALSE)
