@@ -7,6 +7,7 @@ output: html_document
 
 
 ####Goals:
+
 1. define max age for this species
 2. define growth parms
 3. define size at 50% maturity
@@ -18,16 +19,16 @@ output: html_document
 9. define magnitude of background mortality variation
 10. define magnitude of growth variation
 
-```{r, eval=FALSE}
-a=60 
+```{r}
+#a=60 
 #b=0.00017 
-tf=2000
-N0=c(100,0,0,0,0) 
-s=0.28
-e=0.1056 
-l=0.1056
-sx=c(s,s,(s*(1-e)),(s*(l)))
-t<-1
+#tf=2000
+#N0=c(100,0,0,0,0) 
+#s=0.28
+#e=0.1056 
+#l=0.1056
+#sx=c(s,s,(s*(1-e)),(s*(l)))
+#t<-1
 ```
 
 ####Parameters from Lewis
