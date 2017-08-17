@@ -14,8 +14,8 @@ library(tidyr)
 library(foreach)
 ```
 ## Try Lauren's code:
-Here I simulate population size over time given survivals at age and variability in recruitment.
-#```{r}
+Here I simulate population size over time given survivals at age and variability in recruitment. For now, this isn't running.
+```{r, eval=FALSE}
 #1a) Parameters, No Fishing
 a=60 
 b=0.00017 
@@ -47,10 +47,10 @@ AgeStructMatrix = function(sx,a,b,tf,N0) {
 #Call the function for No Hatchery, No Fishing
 Nt=AgeStructMatrix(sx,a,b,tf,N0) 
 plot(Nt)
-#```
+```
 
 OK, now let's try simulating population size when there is fishing.
-#```{r }
+```{r, eval=FALSE }
 #2a) New Parameters for No Hatchery, Fishing
 a=60 
 b=0.00017 
@@ -81,10 +81,10 @@ AgeStructMatrix_F = function(sx,a,b,tf,N0) {
 #sample run
 Nt_F=AgeStructMatrix_F(sx,a,b,tf,N0) 
 plot(Nt_F)
-#```
+```
 
 
-##Try Lewis code (modified)
+##Try Lewis code (I modified it)
 ```{r}
 # load parameters & functions
 source("C:/Users/provo/Documents/GitHub/popdy/parameters.r")
