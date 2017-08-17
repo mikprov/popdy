@@ -13,8 +13,9 @@ library(tidyr)
 #library(Runuran)
 library(foreach)
 ```
-## Try Lauren's code:
-Here I simulate population size over time given survivals at age and variability in recruitment. For now, this isn't running.
+### Try Lauren's code:
+
+Here I simulate population size over time given survivals at age and variability in recruitment. For now, this works but I'm not running it.
 ```{r, eval=FALSE}
 #1a) Parameters, No Fishing
 a=60 
@@ -84,7 +85,7 @@ plot(Nt_F)
 ```
 
 
-##Try Lewis code (I modified it)
+###Try Lewis code (I modified it)
 ```{r}
 # load parameters & functions
 source("C:/Users/provo/Documents/GitHub/popdy/parameters.r")
@@ -185,6 +186,9 @@ simulate <- function(parms_plus = parms_plus, H = 0) {
   }
 # Return list including numbers at age, egg production, and catch for the whole timeseries, 
 # with first 100 time steps trimmed off (to make sure we are around the equilibrium)
+# n = a matrix with a_max rows, and time-100 columns
+# eggs = a vector, egg production each yr
+# catch = a vector, catch each yr
 return(list(n=n, eggs=eggs, catch=catch))
 }
 
