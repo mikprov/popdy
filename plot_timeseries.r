@@ -48,16 +48,30 @@ legend("center",
        xpd = TRUE,
        lwd = 2, col = c(colorRampPalette(c("blue", "red"))(length(output))), title = "Exploitation Rate F")
 
+
+
+
+
 # ------------ code below needs to be fixed ---------------- #
 # plot egg production sensitivity for all fishing levels
-low_f = spec.pgram(output[[1]][[1]]$eggs, spans = c(m,m), plot = FALSE)
-high_f = spec.pgram(output[[length(output)]][[1]]$eggs, spans = c(m,m), plot = FALSE)
-spec.pgram(output[[length(output)]][[1]]$eggs, spans = c(m,m), type = "n", 
+
+# set up spans, the vector of integers giving the widths of smoothers
+tmp <- ceiling(sqrt(length(1:(time-100))))
+if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp}
+# Looks better if smoother, set m higher
+# m = (2 * m) + 1
+m = 3 * m
+
+low_f = spec.pgram(output[[1]]$eggs[2:time], spans = c(m,m), plot = FALSE)
+high_f = spec.pgram(output[[length(output)]]$eggs[2:time], spans = c(m,m), plot = FALSE)
+spec.pgram(output[[length(output)]]$eggs[2:time], spans = c(m,m), type = "n", 
            main = paste("TOP-DOWN FORCING (M)", "\nEgg production"),
            ylim = c(min(high_f$spec), max(low_f$spec)), sub = "",
            ylab = expression("Power spectral density "~(eggs^2)),
            xlab = "Frequency (1/yr)")
 mtext(letters[1], side = 3, line = -1.1, adj = 0.98, cex = 0.8)
 for(i in 1:(length(output))) {
-  spec.pgram(output[[i]][[1]]$eggs, col = colorRampPalette(c("blue", "red"))(length(output))[i], spans = c(m,m), add = TRUE)
+  spec.pgram(output[[i]]$eggs[2:time], 
+             col = colorRampPalette(c("blue", "red"))(length(output))[i], 
+             spans = c(m,m), add = TRUE)
 }
