@@ -52,9 +52,12 @@ legend("center",
 
 
 
-# ------------ code below needs to be fixed ---------------- #
+# --- 
 # plot egg production sensitivity for all fishing levels
-
+# ---
+# for some reason, the periodogram for log(eggs) looks really funky, not sure why yet
+# here i take the inverse of the log
+for(i in 1:length(output)) output[[i]]$eggs = exp(output[[i]]$eggs) # take inverse of log
 # set up spans, the vector of integers giving the widths of smoothers
 tmp <- ceiling(sqrt(length(1:(time-100))))
 if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp}
@@ -65,11 +68,12 @@ m = 3 * m
 low_f = spec.pgram(output[[1]]$eggs[2:time], spans = c(m,m), plot = FALSE)
 high_f = spec.pgram(output[[length(output)]]$eggs[2:time], spans = c(m,m), plot = FALSE)
 spec.pgram(output[[length(output)]]$eggs[2:time], spans = c(m,m), type = "n", 
-           main = paste("TOP-DOWN FORCING (M)", "\nEgg production"),
+           main = paste("", "\ "),
            ylim = c(min(high_f$spec), max(low_f$spec)), sub = "",
            ylab = expression("Power spectral density "~(eggs^2)),
+           #ylab = "",
            xlab = "Frequency (1/yr)")
-mtext(letters[1], side = 3, line = -1.1, adj = 0.98, cex = 0.8)
+#mtext(letters[1], side = 3, line = -1.1, adj = 0.98, cex = 0.8)
 for(i in 1:(length(output))) {
   spec.pgram(output[[i]]$eggs[2:time], 
              col = colorRampPalette(c("blue", "red"))(length(output))[i], 
