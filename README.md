@@ -1,5 +1,5 @@
 # popdy
-####Sensitivities of west coast fish stocks to environmental variability 
+Sensitivities of west coast fish stocks to environmental variability 
 
 `simulation_model.rmd` - this is the main script that generates timeseries of eggs, spawners, and catch. in here it reads two other scripts: parameters_pacifichake.r and functions.r
 
