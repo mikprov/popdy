@@ -5,10 +5,21 @@
 # ---
 # goals:
 # ---
-# 1. plot egg production for multiple harvest levels
+# 1. make a three panel plot with these graphs:
+# 2. plot egg production for multiple harvest levels
+# 3. plot catch 
 
+#par.old = par()
+par(mfcol = c(2,2))
 
-# 1. plot egg production for multiple harvest levels
+# legend code
+plot(0,type='n',axes=FALSE,ann=FALSE)
+legend("center", 
+       legend = c("F = 0.00", "F = 0.4", "F = 0.8", "F = 1.2", "F = 1.6", "F = 2","F = 2.4"), 
+       xpd = TRUE,
+       lwd = 2, col = c(colorRampPalette(c("blue", "red"))(length(output))), title = "Exploitation Rate F")
+
+# 1a) plot egg production for multiple harvest levels
 # with multiple harvest levels
 for(i in 1:length(output)) output[[i]]$eggs = log(output[[i]]$eggs) # take log of eggs
 # plot egg production sensitivity for all fishing levels for a short window at end of simulation
@@ -25,7 +36,7 @@ for(i in 1:(length(output))) {
 }
 
 
-# plot catch sensitivity for all fishing levels
+# 1b) plot catch at all fishing levels
 for(i in 1:length(output)) output[[i]]$catch = log(output[[i]]$catch)
 plot(output[[length(output)]]$catch[(time-100):time], type = "n", 
      #ylim = c(min(output[[length(output)]]$catch[(time-100):time]), max(output[[2]]$catch[(time-100):time])),
@@ -38,8 +49,20 @@ for(i in 2:(length(output))) {
   lines(output[[i]]$catch[(time-100):time], col = colorRampPalette(c("blue", "red"))(length(output))[i])
 }
 
+# 1c) plot all fishing levels
+for(i in 1:length(output)) output[[i]]$n = log(output[[i]]$n)
+plot(output[[length(output)]]$n[(time-100):time], type = "n", 
+     #ylim = c(min(output[[length(output)]]$catch[(time-100):time]), max(output[[2]]$catch[(time-100):time])),
+     main = "Forcing Recruitment",
+     ylim = c(19,22),
+     ylab = "Recruitment",
+     xlab = "Time (yr)")
+mtext(letters[2], side = 3, line = -1, adj = 0.9, cex = 0.8)
+for(i in 2:(length(output))) {
+  lines(output[[i]]$n[(time-100):time], col = colorRampPalette(c("blue", "red"))(length(output))[i])
+}
 
-
+par(mfcol = c(1,1))
 
 # legend code
 plot(0,type='n',axes=FALSE,ann=FALSE)
@@ -64,7 +87,7 @@ if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp}
 # Looks better if smoother, set m higher
 # m = (2 * m) + 1
 m = 3 * m
-
+m = 1 * m
 low_f = spec.pgram(output[[1]]$eggs[2:time], spans = c(m,m), plot = FALSE)
 high_f = spec.pgram(output[[length(output)]]$eggs[2:time], spans = c(m,m), plot = FALSE)
 spec.pgram(output[[length(output)]]$eggs[2:time], spans = c(m,m), type = "n", 
