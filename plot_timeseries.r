@@ -54,7 +54,7 @@ for(i in 1:length(output)) output[[i]]$n = log(output[[i]]$n)
 plot(output[[length(output)]]$n[(time-100):time], type = "n", 
      #ylim = c(min(output[[length(output)]]$catch[(time-100):time]), max(output[[2]]$catch[(time-100):time])),
      main = "Forcing Recruitment",
-     ylim = c(19,22),
+     ylim = c(10,22),
      ylab = "Recruitment",
      xlab = "Time (yr)")
 mtext(letters[2], side = 3, line = -1, adj = 0.9, cex = 0.8)
@@ -63,14 +63,6 @@ for(i in 2:(length(output))) {
 }
 
 par(mfcol = c(1,1))
-
-# legend code
-plot(0,type='n',axes=FALSE,ann=FALSE)
-legend("center", 
-       legend = c("F = 0.00", "F = 0.4", "F = 0.8", "F = 1.2", "F = 1.6", "F = 2","F = 2.4"), 
-       xpd = TRUE,
-       lwd = 2, col = c(colorRampPalette(c("blue", "red"))(length(output))), title = "Exploitation Rate F")
-
 
 
 
