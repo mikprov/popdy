@@ -50,6 +50,13 @@ W[,] = W_inf * (1 - exp(-k * ((1:a_max) - t_0))) ^ b
 # set up empty matrix for maturity at age, given size, at time
 mat = matrix(0, a_max, time)
 # if deterministic growth, fill mat with constant values for maturity at age, based on deterministic growth
+# plogis() gives the distribution function for the logistic distribution with parameters 'location' and 'scale'
+# the output from plogis() gives the prediction at age and time for maturity. 
+# right now it's constant across all ages, this seems wrong (?)
+# location parameter = mean, W_mat=size at 50% mat
+# scale parameter = variance, standard deviation * (pi^2/3)
+# see R help pg: https://stat.ethz.ch/R-manual/R-devel/library/stats/html/Logistic.html
+
 mat[,] <- plogis(W[,1], location = W_mat, scale =  W_mat_sd * (sqrt(3)/pi))
 
 # set up empty matrix for abundance at age at time
