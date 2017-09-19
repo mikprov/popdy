@@ -22,25 +22,33 @@
 # ---
 # 1. Define max age
 # maximum age (yr) from assessment, whereas Botsford et al. use 22
-a_max = 20
-
+#a_max = 20 #Lewis
+a_max = 22
 
 # ---
 # 2. Growth Parameters:
 # using values for 1990-2011 in 2011 assessment
 # von Bertalanffy growth coefficient
-k = 0.3720
+k = 0.3720 # Lewis 
+#k = 0.3002 # from Botsford et al. 2014
+
 # von Bertalanffy theoretical maximum length (cm)
-L_inf = 51.2346
+#L_inf = 51.2346 # Lewis
+L_inf = 53.36 # Botsford et al. 2014
+
 # allometric length-weight exponent
-b = 2.9624
+b = 2.9624 # same in Botsford et al. 2014
+
 # allometric length-weight scale is 0.006419 in Botsford et al. 2014, 
 # but value from assessment is 0.000007 (maybe in kg there?)
-L_W_slope = 0.006419
+L_W_slope = 0.006419 # same in Botsford et al. 2014
+
 # von Bertalanffy theoretical maximum weight (g)
 W_inf = L_W_slope * (L_inf ^ b)
+
 # von Bertalanffy theoretical time at L = 0 or W = 0
-t_0 = - 0.8704
+t_0 = - 0.8704 # because lgth vs wt curve does not go to origin, how did Lewis get this value?
+
 # calculate von Bertalanffy weight at t = 0, W_0, from t_0
 W_0 = W_inf * (1 - exp(k * t_0)) ^ b
 
@@ -60,8 +68,8 @@ W_mat_sd = (L_mat_sd / L_mat) * W_mat
 # mean and sd of size at first recruitment to fishery
 # Length-based values from Botsford et al. 2014, but weight-based values
 # were tuned to get close to matching selectivity at age from 2014 assessment
-L_rec = 26.06
-L_rec_sd = 9.401
+L_rec = 26.06 # same as Botsford et al. 2014
+L_rec_sd = 9.401 # same as Botsford et al. 2014
 W_rec = 3 * (L_W_slope * (L_rec ^ b))
 W_rec_sd = 2 * ((L_rec_sd / L_rec) * W_rec)
 # if dome-shaped selectivity desired, could specify mean and sd of size at escape from fishing
@@ -75,8 +83,8 @@ W_esc_sd = (L_esc_sd / L_esc) * W_esc
 # 5. Natural mortality:
 # instantaneous rate of natural mortality from 2014 initial value =0.2, was used in first runs,
 #   but MLE=0.213 and posterior median=0.222; whereas Botsford et al. 2014 use 0.23, and 0.23 sometimes used elsewhere
-natural_mort = 0.222
-
+# natural_mort = 0.222 # Lewis
+natural_mort = 0.23 # Botsford et al. 2014
 
 # ---
 # 6. Fecundity-weight slope:
@@ -107,8 +115,8 @@ beta = alpha / R_0
 # 8. Magnitude of recruitment variation:
 # magnitude of recruitment variation, in terms of standard deviation, given mean of 0, assessment says 1.4
 # also, see Stachura et al. 2014 if want another, more robust, estimate for Alaska stocks
-eta_sd = (39.93565/71.79419)
- 
+#eta_sd = (39.93565/71.79419) # Lewis
+eta_sd = 0.7 # Botsford et al. 2014
 
 # ---
 # 9. Magnitude of background mortality variation:
