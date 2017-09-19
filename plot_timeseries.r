@@ -55,7 +55,7 @@ plot(output[[length(output)]]$n[(time-100):time], type = "n",
      #ylim = c(min(output[[length(output)]]$catch[(time-100):time]), max(output[[2]]$catch[(time-100):time])),
      main = "Forcing Recruitment",
      ylim = c(10,22),
-     ylab = "Recruitment",
+     ylab = "N",
      xlab = "Time (yr)")
 mtext(letters[2], side = 3, line = -1, adj = 0.9, cex = 0.8)
 for(i in 2:(length(output))) {
@@ -91,6 +91,35 @@ spec.pgram(output[[length(output)]]$eggs[2:time], spans = c(m,m), type = "n",
 #mtext(letters[1], side = 3, line = -1.1, adj = 0.98, cex = 0.8)
 for(i in 1:(length(output))) {
   spec.pgram(output[[i]]$eggs[2:time], 
+             col = colorRampPalette(c("blue", "red"))(length(output))[i], 
+             spans = c(m,m), add = TRUE)
+}
+
+
+# --- 
+# plot catch sensitivity for all fishing levels
+# ---
+# for some reason, the periodogram for log(eggs) looks really funky, not sure why yet
+# here i take the inverse of the log
+for(i in 1:length(output)) output[[i]]$catch = exp(output[[i]]$catch) # take inverse of log
+# set up spans, the vector of integers giving the widths of smoothers
+tmp <- ceiling(sqrt(length(1:(time-100))))
+if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp}
+# Looks better if smoother, set m higher
+# m = (2 * m) + 1
+m = 3 * m
+m = 1 * m
+low_f = spec.pgram(output[[1]]$catch[2:time], spans = c(m,m), plot = FALSE)
+high_f = spec.pgram(output[[length(output)]]$catch[2:time], spans = c(m,m), plot = FALSE)
+spec.pgram(output[[length(output)]]$catch[2:time], spans = c(m,m), type = "n", 
+           main = paste("", "\ "),
+           ylim = c(min(high_f$spec), max(low_f$spec)), sub = "",
+           ylab = expression("Power spectral density "~(catch^2)),
+           #ylab = "",
+           xlab = "Frequency (1/yr)")
+#mtext(letters[1], side = 3, line = -1.1, adj = 0.98, cex = 0.8)
+for(i in 1:(length(output))) {
+  spec.pgram(output[[i]]$catch[2:time], 
              col = colorRampPalette(c("blue", "red"))(length(output))[i], 
              spans = c(m,m), add = TRUE)
 }
