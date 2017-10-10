@@ -33,8 +33,8 @@ k = 0.3720 # Lewis
 #k = 0.3002 # from Botsford et al. 2014
 
 # von Bertalanffy theoretical maximum length (cm)
-#L_inf = 51.2346 # Lewis
-L_inf = 53.36 # Botsford et al. 2014
+L_inf = 51.2346 # Lewis
+#L_inf = 53.36 # Botsford et al. 2014
 
 # allometric length-weight exponent
 b = 2.9624 # same in Botsford et al. 2014
