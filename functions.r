@@ -1,4 +1,8 @@
-# functions from Lewis
+# Functions
+# by: Mikaela Provost, modified from Lewis
+# last edited: 2017-9-20
+
+
 
 assemble_leslie <- function(SR = 'Beverton_Holt', mat_a_array = mat, W_a_array = W, year = j, n = n, H = H, 
                             W_rec = W_rec, W_rec_sd = W_rec_sd, W_esc = W_esc, W_esc_sd = W_esc_sd, M = M,
