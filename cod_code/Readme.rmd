@@ -1,0 +1,54 @@
+---
+title: "Readme"
+author: "Mikaela Provost"
+date: "December 5, 2017"
+output: html_document
+---
+
+Parking Lot: 
+Search for largest (or oldest) fish in each population, and overall
+Cut off spawning biomass dist at oldest age
+Just curious - histogram of ages for each population
+re-print spawning biomass dist multiplot
+re-print cv vs dampratio (mode, lambda1 adjusted)
+print mode vs sd
+print mode vs dampratoi
+print sd vs dampratio
+export table for regression analysis
+RAM Legacy --> do they have my cod stocks? What info?
+
+
+Done List:
+write/compile script for 'plot spawning biomass distributions'
+in calculate_LSB_at_age function, I need to add column for lsuba = survival at age (to age?)
+this is to calculate probability of spawning (lsuba*msuba/Ro)
+--> yes, lsuba*msuba/Ro is the same as dividing LSB at age by the sum of LSB across ages!
+verify my method for calculating mean and sd matches Loo's
+--> yes, I was calculating means and sds right. Send Loo code.
+write/compile script for 'plot cv vs damping ratio'
+--> done!
+multiply fecundity in leslie by 1/lambda, then recalc eigenvalues
+check to see if damping ratio is 2/1 or 1/2: LY, ch4?
+in spawning distribution, replace mean with mode, then recalc CV 
+test different multilpiers to get lambda=1 (do this in plotting code)
+spawning biomass dists --> get all x axes to be 1-40
+truncate probability of spawning --> don't want to truncate beginning of 
+
+
+Description of scripts:
+There are a number of scripts associated with the cod project. Here is a description of each script. 
+
+0_load_cod_data.r:
+Loads the cod data from Hui-Yu and separates it into the different cod populations.
+
+1_LSB_Lesliematrices_cod.r:
+This script uses the assemble_Leslie() function to generate Leslie matrices for each cod population. All the Leslie matrices are exported and stored as .csv files. This script also uses calculate_LSB_at_age_by_F() function to generate LSB at age for different fishing levels. 
+
+2_cod_functions.r:
+This script has 3 functions: 1) assemble_Leslie(), 2) calculate_LSB_at_age_by_F(), 3) extract_first_eigen_value(), 4) extract_second_eigen_value()
+
+3_plot_spawning_biomass_distribution.r:
+Two plots are generated here - spawning biomass distribution for each population. And
+the other is a plot of CV of spawning distribution vs damping ratio (lambda2/lambda1)
+-- code that adjusts fecundities in Leslie matrix so that lambda 1 is ~1
+-- recalculates the CV with mode instead of mean
