@@ -5,9 +5,18 @@
 # ---
 # goals:
 # ---
-# 1. make a three panel plot with these graphs:
+# 1. make a 2x2 panel plot with these graphs:
 # 2. plot egg production for multiple harvest levels
-# 3. plot catch 
+# 3. plot catch for multiple harvest levels
+# 4. plot n for multiple harvest levles
+# 5. plot legend for harvest levels
+
+# I log transform egg, catch, n later on, so store original simulation output here:
+#output.original <- output
+
+# Run this to restore the 'output' list (not log transformed)
+#output <- output.original
+
 
 #par.old = par()
 par(mfcol = c(2,2))
@@ -25,8 +34,8 @@ for(i in 1:length(output)) output[[i]]$eggs = log(output[[i]]$eggs) # take log o
 # plot egg production sensitivity for all fishing levels for a short window at end of simulation
 plot(output[[length(output)]]$eggs[(time-100):time], type = "n", 
      main = "FORCING RECRUITMENT",
-     #ylim = c(min(output[[length(output)]]$eggs[(time-100):time]), max(output[[1]]$eggs[(time-100):time])), 
-     ylim = c(13,30),
+     ylim = c(min(output[[length(output)]]$eggs[(time-100):time]), max(output[[1]]$eggs[(time-100):time])), 
+     #ylim = c(13,30),
      ylab = "Egg production",
      xlab = "Time (yr)")
 mtext(letters[1], side = 3, line = -1, adj = 0.9, cex = 0.8)
@@ -101,7 +110,7 @@ for(i in 1:(length(output))) {
 # ---
 # for some reason, the periodogram for log(eggs) looks really funky, not sure why yet
 # here i take the inverse of the log
-for(i in 1:length(output)) output[[i]]$catch = exp(output[[i]]$catch) # take inverse of log
+#for(i in 1:length(output)) output[[i]]$catch = exp(output[[i]]$catch) # take inverse of log
 # set up spans, the vector of integers giving the widths of smoothers
 tmp <- ceiling(sqrt(length(1:(time-100))))
 if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp}
