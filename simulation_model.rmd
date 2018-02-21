@@ -20,7 +20,11 @@ library(foreach)
 # load parameters & functions
 source("C:/Users/provo/Documents/GitHub/popdy/parameters_pacifichake.r")
 source("C:/Users/provo/Documents/GitHub/popdy/functions.r")
-#load parameters doc, but for now here are the relevant parms
+
+# note: in 'functions' this includes - 
+# 1) assemble_leslie
+# 2) is_mature
+
 # length of simulation in years
 time = 5100
 
@@ -86,7 +90,7 @@ simulate <- function(parms_plus = parms_plus, H = 0) {
   # fill in abundance at age for time = 1 given that pop is fished at fishing mortality H at all ages and at the SAD
   n[,1] = R_0 * exp(- (natural_mort + H) * (0:(a_max-1)))
   
-  for(j in 2:time){
+  for(j in 2:time){ # step through each time step, now that we have abundance at age in t=1
     
     # if deterministic growth, or stochastic growth with prespecified forcing,
     # assign weight at age as constant by commenting out assignment to W_a_array
@@ -103,8 +107,9 @@ simulate <- function(parms_plus = parms_plus, H = 0) {
       #}
 
     # store results from computing Leslie matrix for time j
-    leslie_eggs_catch <- assemble_leslie(SR = 'Beverton_Holt', mat_a_array = mat, W_a_array = W, year = j, n = n, H = H, 
-                                         W_rec = W_rec, W_rec_sd = W_rec_sd, W_esc = W_esc, W_esc_sd = W_esc_sd, M = M,
+    leslie_eggs_catch <- assemble_leslie(SR = 'Beverton_Holt', mat_a_array = mat, W_a_array = W, 
+                                         year = j, n = n, H = H, W_rec = W_rec, W_rec_sd = W_rec_sd, 
+                                         W_esc = W_esc, W_esc_sd = W_esc_sd, M = M,
                                          f_W_slope = f_W_slope, alpha = alpha, beta = beta, eta = eta)
     # extract Leslie matrix for time j
     A <- leslie_eggs_catch$A
