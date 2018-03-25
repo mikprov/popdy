@@ -12,27 +12,29 @@ library(faraway)
 #    loop over multiple cod populations
 #
 # c) littlek = the value multiple across the top row of the Leslie matrix, 
-#    is a measure of fishing pressure (Lauren's analysis)
+#    is a measure of fishing pressure (Lauren's analysis). littlek = 1 --> no fishing
 
-assemble_Leslie <- function(data,codPopname,littlek) {
+assemble_Leslie <- function(data,littlek,maxage,K,L_inf,TEMP) {
+ 
+  Age=1:maxage
   
   data = subset(data,Yearclass>1959)  #yearclasses vary among stocks
   data = subset(data,Yearclass<1990)
   
   # load parms for cod pop
-  source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codPopname, '.r', sep=''))
+  #source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codPopname, '.r', sep=''))
   # this should load parms: L_inf, K, TEMP
   
   # calculate maturity, weight parms
-  (mod.mat = glm(MATPROP~AGE,family=binomial,data=data)) #gives maturity beta coefficients
+  mod.mat = glm(MATPROP~AGE,family=binomial,data=data) #gives maturity beta coefficients
   
   L=L_inf*(1-exp(-K*Age))
   #MG=exp(0.55-1.61*log(L)+1.44*log(L_inf)+log(K)) #Gislason model II
   MG3 = exp(15.11-1.59*log(L)+0.82*log(L_inf)-3891/(273.15+6.75))  #Gisllason model III
   MP = 10^(-0.0066-0.279*log10(L_inf)+0.6543*log10(K)+0.4634*log10(10.56))  #Pauly model
   #Vul1 = data$CANUM/data$STNUM
-  growth = 0.00001*(L_inf*(1-exp(-K*(Age-to))))^3 # weight at age
-  mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age)
+  growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3 # weight at age
+  mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age) # proportion mature
   
   # -- assemble NEAR df: use NEAR to calculate Leslie matrix
   NEAR = data.frame(cbind(Age,mat1,growth))  #life table
@@ -44,9 +46,9 @@ assemble_Leslie <- function(data,codPopname,littlek) {
   
   # -- for each age, get F and survival
   for(j in 1:length(Age)){ # step through ages
-    NEAR$F[j] = NEAR$Vul1[j]*F.halfmax[1]	# Vul1 should be selectivity, but it's mat
+    NEAR$FISH[j] = NEAR$Vul1[j] #*F.halfmax[1]	# Vul1 should be selectivity, but we are using mat (maturity)
     
-    NEAR$SURV = exp(-(NEAR$F+NEAR$M_G)) #SURV is the fraction surviving at each age
+    NEAR$SURV = exp(-(NEAR$FISH+NEAR$M_G)) #SURV is the fraction surviving at each age
     
     #NEAR$Survship = 0 # set up column for survivorship (amount or fraction present at age)
     #NEAR$Survship[1] = 1
@@ -66,7 +68,7 @@ assemble_Leslie <- function(data,codPopname,littlek) {
     A[u+1,u]=NEAR$SURV[u]
   }
   return(A=A)
-  return(NEAR=NEAR) # returns Leslie matrix
+  #return(NEAR=NEAR) # returns Leslie matrix
 } # closes assemble_Leslie matrix function
 
 
@@ -115,14 +117,12 @@ extract_second_eigen_value <- function(Lesliematrix){
 #   loop over multiple cod populations
 # littlek = the value multiple across the top row of the Leslie matrix, 
 #   is a measure of fishing pressure (Lauren's analysis)
-calculate_LSB_at_age_by_F <- function(data,codPopname,littlek){
+calculate_LSB_at_age_by_F <- function(data,littlek,maxage,L_inf,K,TEMP,F.halfmax){
+  
+  Age = 1:maxage
   
   data = subset(data,Yearclass>1959)  #yearclasses vary among stocks
   data = subset(data,Yearclass<1990)
-  
-  # -- load parms for cod pop:
-  source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codPopname, '.r', sep=''))
-  # this should load parms: L_inf, K, TEMP
   
   # -- calculate maturity, weight parms
   (mod.mat = glm(MATPROP~AGE,family=binomial,data=data)) #gives maturity beta coefficients
@@ -131,7 +131,7 @@ calculate_LSB_at_age_by_F <- function(data,codPopname,littlek){
   MG3 = exp(15.11-1.59*log(L)+0.82*log(L_inf)-3891/(273.15+6.75))  #Gisllason model III
   MP = 10^(-0.0066-0.279*log10(L_inf)+0.6543*log10(K)+0.4634*log10(10.56))  #Pauly model
   #Vul1 = data$CANUM/data$STNUM
-  growth = 0.00001*(L_inf*(1-exp(-K*(Age-to))))^3
+  growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3
   mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age)
   
   # -- assemble NEAR df: use NEAR to calculate LSB

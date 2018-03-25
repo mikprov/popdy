@@ -11,3 +11,4 @@ theta1 = 0.57
 TEMP = 0
 A50 = 5.97
 S50 = 7.47
+maxage = 17 #from stock assessment

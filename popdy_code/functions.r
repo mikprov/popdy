@@ -53,7 +53,9 @@ assemble_leslie <- function(SR = 'Beverton_Holt', mat_a_array = mat, W_a_array =
     # define f[i]'s
     #A[1,1:a_max] <- ((alpha * exp(eta())) / (1 + (beta * E))) * m
     # NEW FORM- draw from preallocated time series of forcing in recruitment
+    # R(P(t)) = (alpha*E*exp(eta[year])) / (1 + (beta*E))
     A[1,1:a_max] <- ((alpha * exp(eta[year])) / (1 + (beta * E))) * m
+    
     
     # currently only alternative is Ricker, but should build in more options
   } else {
@@ -68,8 +70,6 @@ assemble_leslie <- function(SR = 'Beverton_Holt', mat_a_array = mat, W_a_array =
 }
 
 
-  
-  
 is_mature <- function(mat_function = 'logistic', mat_a_array = mat, W_a_array = W, age = i, 
                         year = j, location = W_mat, scale = W_mat_sd * (sqrt(3)/pi)) {
     

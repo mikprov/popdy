@@ -1,4 +1,4 @@
-# West Scotland
+# 3M
 name = "3M" 
 L_inf = 98
 K = 0.15
@@ -11,3 +11,4 @@ theta1 = 0.54
 TEMP = 3.5
 A50 = 3.59
 S50 = 4.31
+maxage = 8 #from data

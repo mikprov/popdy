@@ -11,3 +11,4 @@ theta1 = 0.16
 TEMP = 5.8
 A50 = 6.76
 S50 = 8
+maxage = 14 #from data

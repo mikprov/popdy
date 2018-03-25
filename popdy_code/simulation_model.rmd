@@ -7,16 +7,17 @@ output: html_document
 
 Get my packages:
 ```{r}
-library(ggplot2)
-library(tidyr)
+require(ggplot2)
+require(tidyr)
 #install.packages("Reunran","foreach")
 #library(Runuran)
-library(foreach)
+require(foreach)
 ```
 
 ```{r}
 # load parameters & functions
-source("C:/Users/provo/Documents/GitHub/popdy/popdy_code/parameters_pacifichake.r")
+#source("C:/Users/provo/Documents/GitHub/popdy/popdy_code/parameters_pacifichake.r")
+source("C:/Users/provo/Documents/GitHub/popdy/popdy_code/parameters_pacificmackerel.r")
 source("C:/Users/provo/Documents/GitHub/popdy/popdy_code/functions.r")
 # note: in 'functions' this includes - 
 # 1) assemble_leslie
@@ -77,8 +78,9 @@ parms_plus = c(eta = eta, M = M, time = time, W = W, mat = mat, n = n, eggs = eg
                a_max = a_max, k = k, W_inf = W_inf, b = b, L_W_slope = L_W_slope, catch = catch,
                W_inf = W_inf, t_0 = t_0, W_mat = W_mat, W_mat_sd = W_mat_sd, W_rec = W_rec,
                W_rec_sd = W_rec_sd, W_esc = W_esc, W_esc_sd = W_esc_sd, f_W_slope = f_W_slope,
-               f_W_int = f_W_int, alpha = alpha, beta = beta, W_inf_sd = W_inf_sd, 
-               W_inf_min = W_inf_min, W_inf_max = W_inf_max, R_0 = R_0, natural_mort = natural_mort)
+               f_W_int = f_W_int, alpha = alpha, beta = beta, #W_inf_sd = W_inf_sd, 
+               #W_inf_min = W_inf_min, W_inf_max = W_inf_max, 
+               R_0 = R_0, natural_mort = natural_mort)
 
 ```
 
@@ -97,7 +99,7 @@ simulate <- function(parms_plus = parms_plus, H = 0) {
     # at this time step, calculate the Leslie matrix, total eggs, total cal
     leslie_eggs_catch <- assemble_leslie(SR = 'Beverton_Holt', mat_a_array = mat, 
                                          W_a_array = W, year = j, n = n, H = H, 
-                                         W_rec = W_rec, W_rec_sd = W_rec_sd,                                                                  W_esc = W_esc, W_esc_sd = W_esc_sd, M = M,
+                                         W_rec = W_rec, W_rec_sd = W_rec_sd,                                                                            W_esc = W_esc, W_esc_sd = W_esc_sd, M = M,
                                          f_W_slope = f_W_slope, alpha = alpha, 
                                          beta = beta, eta = eta)
     # extract Leslie matrix for time j
@@ -130,7 +132,11 @@ return(list(n=n, eggs=eggs, catch=catch))
 
 For a range of harvest levels, generate output (n, eggs, catch). This ouptut is used to generate timeseries plots of eggs, abundance, catch over time. And these are used to calculate specturm analysis. 
 ```{r}
-output = foreach(H. = seq(0, 2.4, 0.4)) %do% simulate(H = H.)
+#output = foreach(H. = seq(0, 2.4, 0.4)) %do% simulate(H = H.)
+output = simulate(H=0)
+plot(output$eggs)
+plot(output$n)
+
 
 ```
 
