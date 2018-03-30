@@ -4,26 +4,17 @@
 # Plan
 # 
 
-#library(foreach)
-rm(list=ls())
 # ===================================================================
-# 1) specify parms 
-
-# If I add populations, I need to specify their names in codPop
-# And I need to make sure a script is saved in [path] and is labeled w/the name in codPop
-codPop <- c("Celtic_Sea","3NO","North_Sea","West_Scotland",
-            "West_Baltic","Kattegat","Coastal_Norway",
-            "Faroes","Iceland","NE_Arctic","Georges_Bank",
-            "Gulf_of_Maine","N_Gulf_St_Lawrence")
-
-# ===================================================================
-# 2) define function
+# 1) load libraries
 library(ggplot2)
 library(reshape2)
 library(RColorBrewer)
+library(zoo)
+library(tidyr)
 
+# ===================================================================
+# 2) define sim model
 sim_model <- function(A,timesteps,alpha,beta,sig_r,initial_eggs) {
-  
   maxage = length(A[,1])
   ages = length(seq(1,maxage))
   N0 = c(initial_eggs, rep(0,ages-1))
@@ -57,40 +48,43 @@ sim_model <- function(A,timesteps,alpha,beta,sig_r,initial_eggs) {
   return(list(N_t=N_t, eggs=eggs, recruits=recruits, Nsize=Nsize))
 }
 
-# read in eigentable - I'm using some information from the table
-# to include on frequency content plots
+# ===================================================================
+# 3) read in eigentable - I'm using some information from the table
 eigentable = read.csv("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable5.csv",
                       header=TRUE,stringsAsFactors = FALSE)
 eigentable = as.data.frame(eigentable)
 
-
-# Create multi-panel plot of frequency content plots
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/freq_content_plots_N.pdf', width=7, height=10)
-par(mfrow=c(5,3))
+# ===================================================================
+# 4) run simulation
+# ---
+# create empty objects for simulation
 freq = seq(from=0.001111111, to=0.5, by=0.001111111) #all frequencies, for plotting later
 spall = matrix(NA, length(freq),length(eigentable$codNames)) #set up empty matrix, for plotting all pops together
-
-# read in each Leslie matrix, simulate, then plot frequency content
+outputL = vector("list", length(eigentable$codNames)) #create empty list to store sim output
+names(outputL) = eigentable$codNames
+# ---
+# set params for simulation:
+timesteps = 1000
+rm_first_timesteps = 100
+alpha = 100
+beta = 1000
+initial_eggs = 1000
+sig_r = 0.1
+# ---
+# run simulation
 for (i in 1:length(eigentable$codNames)) { # step through each cod population
   A = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
                               ,eigentable$codNames[i], '.txt', sep=''))
   A = as.matrix(A)
-  # run simulation 
-  timesteps = 1000
-  rm_first_timesteps = 100
-  alpha = 100
-  beta = 1000
-  initial_eggs = 1000
-  sig_r = 0.1
   output = sim_model(A=A, timesteps=timesteps, 
                      alpha=alpha, beta=beta, 
                      sig_r=sig_r, initial_eggs=initial_eggs)  
-  # setting the 'span' - a vector of odd integers to specify the smoothers
+  outputL[[i]] = output #save sim output for each pop 
+  # setting 'span' - a vector of odd integers to specify the smoothers
   tmp <- ceiling(sqrt(length(1:(timesteps-rm_first_timesteps-1)))) #square root of timeseries length, rounded
   if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp} #make it odd, if the square root is even
-  
   # plot frequency content
-  sp = spec.pgram(x=output[[1]][rm_first_timesteps:(timesteps-2)], 
+  sp = spec.pgram(x=output[[2]][rm_first_timesteps:(timesteps-2)], 
              spans=c(m,m),plot = FALSE)
   spall[,i] = sp$spec #save spec output for plotting pops together
   plot(x=sp$freq,y=sp$spec,type="l",main=eigentable$codNames[i])
@@ -98,28 +92,74 @@ for (i in 1:length(eigentable$codNames)) { # step through each cod population
                       paste("sd (mode)=",round(x=eigentable$sd_mode[i],digits=2)),
                       paste("CV=",round(x=eigentable$cvs_mode[i],digits=2))))
 }
-dev.off()
-par(mfrow=c(1,1))
-
-# plot freq content on one figure
-spall = cbind(seq(from=0.001111111, to=0.5, by=0.001111111),spall)
-colnames(spall) = c("freq",eigentable$codNames)
-splong = melt(as.data.frame(spall),id="freq") #long form for ggplot
-mycolors = c(brewer.pal(name="Set1", n = 8), brewer.pal(name="Paired", n = 8)) #16 pops, but pallettes only have 8
-
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/freq_content_oneplot_N.pdf', width=7, height=10)
-ggplot(data=splong, aes(x=freq,y=value,color=variable,linetype=variable)) + 
-  geom_line(lwd=1) + theme_classic() +
-  scale_linetype_manual(values=c(rep("solid",10),rep("dashed",6))) +
-  scale_color_manual(values=mycolors) +
-  ggtitle("N")
-dev.off()
+rm(sp,tmp,A) #clean up
+sp = cbind(seq(from=0.001111111, to=0.5, by=0.001111111),spall) #save freq with spec
+colnames(sp) = c("freq",eigentable$codNames)
+sp = as.data.frame(sp)
 
 
+# ===================================================================
+# 5) calculate area under curve for all pops (data is not normalized, not log):
+AUC = rep(NA,length(eigentable$codNames))
+for (i in 1:(length(eigentable$codNames))) {
+  x = sp$freq
+  y = sp[,i+1]
+  id = order(x)
+  AUC[i] = sum(diff(x[id]) * rollmean(y[id],2))
+}
+AUC = as.data.frame(cbind(eigentable$codNames,AUC))
+colnames(AUC) <- c("codNames","varAUC")
+rm(id,x,y) #clean up
+# ---
+# calculate variance in time steps, compare to AUC
+varpops = rep(NA, length(eigentable$codNames))
+for (i in 1:length(outputL)) {
+  varpops[i] = var(outputL[[i]]$eggs[rm_first_timesteps:(timesteps-2)])}
+varpops = as.data.frame(cbind(eigentable$codNames,varpops))
+colnames(varpops) <- c("codNames", "varTS")
+
+dd <- cbind(AUC,varpops$varTS)
+dtid <- dd %>% gather(varType, var, )
+
+ggplot(data=dd,aes(x=codNames))
+
+
+# ===================================================================
+# 6) normalize the variance
+maxs <- apply(sp[2:17],2,max) #find max variance for each pop
+spp = cbind( seq(from=0.001111111, to=0.5, by=0.001111111),t(t(sp[2:17])/maxs)) #divide var at all freq by max
+colnames(spp) = c("freq",eigentable$codNames)
+spp = as.data.frame(spp) #use this to plot 
+
+# ===================================================================
+# 7) get ready to plot (default is 'spp' for normalized, choose 'sp' for original)
+splong = melt(as.data.frame(spp),id="freq") #long form for ggplot
+colnames(splong) <- c("freq","codNames","value")
+temptable = subset(eigentable, select=c(codNames,temp))
+splongt = merge(temptable,splong,by="codNames")
+
+#mycolors = c(brewer.pal(name="Set1", n = 8), brewer.pal(name="Paired", n = 8)) #16 pops, but pallettes only have 8
+
+# ---
+# plot all frequencies on one plot (each line color coded w/temp): 
+#pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/freq_content_oneplot_N.pdf', width=7, height=10)
+ggplot(data=splongt, aes(x=freq,y=value, group=codNames)) + 
+  geom_line(aes(color=temp)) + theme_classic() +
+  scale_color_gradientn(colors = rev(rainbow(n=10,start=0,end=0.7))) +
+  ggtitle("eggs") +
+  scale_y_log10() 
+  #geom_text(aes(label=codNames),hjust=-0.1,vjust=-0.2,check_overlap = F) +
+  #scale_linetype_manual(values=c(rep("solid",10),rep("dashed",6))) +
+  #scale_color_manual(values=mycolors) +
+#dev.off()
+
+# ---
 # plot timeseries, can be eggs, recruits, or N
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/timeseries1.pdf', width=7, height=10)
-par(mfrow=c(5,3))
-tspt = matrix(NA,nrow=899,ncol=length(eigentable$codNames))
+#pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/timeseries1.pdf', width=7, height=10)
+#par(mfrow=c(5,3))
+
+
+# ---
 for (i in 1:length(eigentable$codNames)) { # step through each cod population
   A = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
                               ,eigentable$codNames[i], '.txt', sep=''))
