@@ -38,20 +38,25 @@ source("C:/Users/provo/Documents/GitHub/popdy/cod_code/2_cod_functions.r")
 # prep for looping
 tknot = 0
 k = 1
+F.halfmax = 0
 
 # loop over pop data in datalist to generate Leslie matrices
 Alist = as.list(rep(NA,length(datalist))) # store Leslie matrix
 names(Alist) = codNames
+
+
 
 # step through each dataset in datalist
 for (i in 1:length(names(Alist))) {
   # load parms for cod pop i
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',names(Alist)[i], '.r', sep=''))
   # this should load parms: L_inf, K, TEMP, maxage
-  
-  Alist[[i]]=assemble_Leslie(data=datalist[[i]], littlek=k, maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP)
+  Alist[[i]]=assemble_Leslie(data=datalist[[i]], littlek=k, maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
+                             F.halfmax=0,tknot=0)
+  newfecunds=Alist[[i]][1,] * multiplier_value #adjust fecundities so that lambda1 = 1
+  Alist[[i]][1,] <- newfecunds #replace new fecundities with old in Leslie 
   write.table(Alist[[i]],
-              file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/",
+              file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/k1_adjustlambda/",
                          codNames[i],".txt",sep=""))
 }
 rm(K,L_inf,maxage)
@@ -83,9 +88,8 @@ for (i in 1:length(datalist)) { # step through each pop in datalist
 }
 
 
-
-
-
+lsb <- read.table("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/LSBmatrix_maxages/GM.txt")
+matplot(lsb,type="l")
 
 ```
 

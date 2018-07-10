@@ -1,6 +1,6 @@
 # Load cod data and break up into populations
 
-cod = read.table("C:/Users/provo/Documents/GitHub/popdy/cod_code/huiyu/cod_all_2013.txt",header=T,na.strings="NA")
+cod = read.table("C:/Users/provo/Documents/GitHub/popdy/cod_code/huiyu/cod_all_2013.txt",header=T,stringsAsFactors = FALSE)
 setwd("C:/Users/provo/Documents/GitHub/popdy/cod_code/huiyu/LSB_varyfishing")
 
 NorthseaD = subset(cod, AREA=="NORTH_SEA")
@@ -28,22 +28,39 @@ cod2J3KLD = subset(cod,AREA=="cod2J3KL")
 
 datalist <- list(NorthseaD,CoasD,W_BalticD,
                  FaroeD,NE_ArcticD,CelticD,
-                 IcelandD,KatD,W_ScotlandD,
+                 IcelandD,IrishD,KatD,W_ScotlandD,
                  NGulfD,GBD,GMD,
                  cod3NOD,cod3MD,cod2J3KLD,
                  cod3PsD)
 
 codNames <- c("Northsea","Coas","W_Baltic",
               "Faroe","NE_Arctic","Celtic",
-              "Iceland","Kat","W_Scotland",
+              "Iceland","Irish","Kat","W_Scotland",
               "NGulf","GB","GM",
-              "3NO","3M","2J3KL",
-              "3Ps")
+              "cod3NO","cod3M","cod2J3KL",
+              "cod3Ps")
 
 names(datalist) <- c("Northsea","Coas","W_Baltic",
                      "Faroe","NE_Arctic","Celtic",
-                     "Iceland","Kat","W_Scotland",
+                     "Iceland","Irish","Kat","W_Scotland",
                      "NGulf","GB","GM",
-                     "3NO","3M","2J3KL",
-                     "3Ps")
+                     "cod3NO","cod3M","cod2J3KL",
+                     "cod3Ps")
 
+# this is playing around with FMOR at age over time
+dd <- cod3PsD
+ggplot(dd, aes(x=AGE,y=FMOR,group=YEAR)) +
+  geom_line(aes(color=YEAR)) +
+  scale_color_gradient(low="yellow",high="brown") +
+  xlim(0,25)+
+  #coord_cartesian(xlim = c(min(dd$AGE), max(dd$age) + 1)) +
+  geom_text_repel(
+    data = subset(dd, AGE == max(AGE)),
+    aes(label = YEAR, color = YEAR),
+    size = 3,
+    nudge_x = 2,
+    #nudge_y = 0.5,
+    show.legend = FALSE,
+    segment.color = "gray",
+    segment.alpha = 1
+  )

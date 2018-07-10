@@ -27,7 +27,7 @@ max_ages_table
 # Plot spawning biomass distribution -- new way: treat as probability distribution
 # y axis = probability of spawning
 # x axis = age
-Age = 1:40
+Age = 1:30
 cvs = rep(NA,length(codNames)) # empty vector to store cv for populations
 cvs_mode = rep(NA, length(codNames))
 mean_age = rep(NA, length(codNames))
@@ -36,7 +36,7 @@ sd_age = rep(NA, length(codNames))
 sd_mode = rep(NA, length(codNames))
 # note: need to recalculate sd with mode, instead of mean
 
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/SBplot_nofishing_probofspawning_v3_oldestage.pdf', width=7, height=10)
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/SBplot_nofishing_probofspawning_v3_0.0120.pdf', width=7, height=10)
 par(mfrow=c(5,3))
 
 for (i in 1:length(codNames)) { # step through each cod population
@@ -46,10 +46,10 @@ for (i in 1:length(codNames)) { # step through each cod population
   p_spawn = datax[,1] / sum(datax[,1]) # datax[,1] is LSB at age
                                        # probability of spawning at age = LSB at age/total LSB
   p_table = data.frame(cbind(Age,p_spawn))
-  #keep <- p_table[which(p_table$p_spawn > 0.01),] # remove probabilities less than 0.01
-  keep <- p_table[which(p_table$Age <= 
-                          max_ages_table[max_ages_table$codNames == codNames[i],]$max_ages),
-                  ] # removes ages older than the oldest age found in the population
+  keep <- p_table[which(p_table$p_spawn > 0.01),] # remove probabilities less than 0.01
+  #keep <- p_table[which(p_table$Age <= 
+                   #       max_ages_table[max_ages_table$codNames == codNames[i],]$max_ages),
+                  #]  removes ages older than the oldest age found in the population
   
   # using mode
   #mode_age[i] = which.max(keep$p_spawn) # mode, testing out instead of mean in CV
@@ -64,17 +64,18 @@ for (i in 1:length(codNames)) { # step through each cod population
   
   # Plot spawning distribution for each population:
   plot(x=keep$Age, y=keep$p_spawn,type="l",
-       main=codNames[i], ylab="probability of spawning",
-       ylim=c(0,0.3), xlim=c(1,40))
-  abline(v=mode_age[i],col="red",lty=2)
+       main=codNames[i], ylab="Pr(spawning)",
+       xlab="Age",
+       ylim=c(0,0.3), xlim=c(1,35))
+  abline(v=mode_age[i],col="grey",lty=2)
   # paste the mean, sd, cv on each population plot
-  legend("topright",c(paste("mode=",round(x=mode_age[i],digits=2)),
-                      paste("sd (mode)=",round(x=sd_mode[i],digits=2)),
-                      paste("CV=",round(x=cvs_mode[i],digits=2))))
+  #legend("topright",c(paste("mode=",round(x=mode_age[i],digits=2)),
+  #                    paste("sd (mode)=",round(x=sd_mode[i],digits=2)),
+  #                    paste("CV=",round(x=cvs_mode[i],digits=2))))
 }
-par(mfrow=c(1,1))
-dev.off()
 
+dev.off()
+par(mfrow=c(1,1))
 
 
 # ---
