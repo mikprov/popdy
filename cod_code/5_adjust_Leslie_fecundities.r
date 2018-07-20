@@ -378,3 +378,7 @@ c(f,fadj,sadj)
 multiplier_values[16] <- 1/2.5
 
 write.csv(multiplier_values,file='C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/multiplier_values.csv')
+
+# ---
+# Read in Leslie matrix for each cod pop, multiply fecundity
+# values 

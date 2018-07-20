@@ -48,19 +48,19 @@ names(datalist) <- c("Northsea","Coas","W_Baltic",
                      "cod3Ps")
 
 # this is playing around with FMOR at age over time
-dd <- cod3PsD
-ggplot(dd, aes(x=AGE,y=FMOR,group=YEAR)) +
-  geom_line(aes(color=YEAR)) +
-  scale_color_gradient(low="yellow",high="brown") +
-  xlim(0,25)+
+#dd <- cod3PsD
+#ggplot(dd, aes(x=AGE,y=FMOR,group=YEAR)) +
+#  geom_line(aes(color=YEAR)) +
+#  scale_color_gradient(low="yellow",high="brown") +
+#  xlim(0,25)+
   #coord_cartesian(xlim = c(min(dd$AGE), max(dd$age) + 1)) +
-  geom_text_repel(
-    data = subset(dd, AGE == max(AGE)),
-    aes(label = YEAR, color = YEAR),
-    size = 3,
-    nudge_x = 2,
+#  geom_text_repel(
+#    data = subset(dd, AGE == max(AGE)),
+#    aes(label = YEAR, color = YEAR),
+#    size = 3,
+#    nudge_x = 2,
     #nudge_y = 0.5,
-    show.legend = FALSE,
-    segment.color = "gray",
-    segment.alpha = 1
-  )
+#    show.legend = FALSE,
+#    segment.color = "gray",
+#    segment.alpha = 1
+#  )

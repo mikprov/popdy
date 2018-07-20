@@ -11,10 +11,9 @@ library(faraway)
 # b) codPopname = name of the cod population, important because Leslie function will
 #    loop over multiple cod populations
 #
-# c) littlek = the value multiple across the top row of the Leslie matrix, 
-#    is a measure of fishing pressure (Lauren's analysis). littlek = 1 --> no fishing
 
-assemble_Leslie <- function(data,littlek,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
+
+assemble_Leslie <- function(data,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
  
   Age=1:maxage
   
@@ -53,7 +52,7 @@ assemble_Leslie <- function(data,littlek,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
   
   # --- if I want to multiply fecundities by some k term, use this line --- #
   #A[1,] = NEAR[,2]*NEAR[,3] # insert fecundity (maturity * weight) in top row
-  A[1,] = NEAR$mat1*NEAR$growth*littlek # insert fecundity (maturity * weight) in top row
+  A[1,] = NEAR$mat1*NEAR$growth # insert fecundity (maturity * weight) in top row
   # ----------------------------------------------------------------------- #
   
   for(u in 2:length(Age)-1){ # insert survival into A on subdiagonal
@@ -109,6 +108,8 @@ extract_second_eigen_value <- function(Lesliematrix){
 #   loop over multiple cod populations
 # littlek = the value multiplied across the top row of the Leslie matrix, 
 #   is a measure of fishing pressure (Lauren's analysis)
+source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/','Northsea', '.r', sep=''))
+
 calculate_LSB_at_age_by_F <- function(data,littlek,maxage,L_inf,K,TEMP,F.halfmax){
   
   Age = 1:maxage
@@ -117,7 +118,7 @@ calculate_LSB_at_age_by_F <- function(data,littlek,maxage,L_inf,K,TEMP,F.halfmax
   data = subset(data,Yearclass<1990)
   
   # -- calculate maturity, weight parms
-  (mod.mat = glm(MATPROP~AGE,family=binomial,data=data)) #gives maturity beta coefficients
+  mod.mat = glm(MATPROP~AGE,family=binomial,data=data) #gives maturity beta coefficients
   L=L_inf*(1-exp(-K*Age))
   #MG=exp(0.55-1.61*log(L)+1.44*log(L_inf)+log(K)) #Gislason model II
   MG3 = exp(15.11-1.59*log(L)+0.82*log(L_inf)-3891/(273.15+6.75))  #Gisllason model III
@@ -147,7 +148,7 @@ calculate_LSB_at_age_by_F <- function(data,littlek,maxage,L_inf,K,TEMP,F.halfmax
       } # closes survivorship loop
     } # closes age loop
     
-    LEPdf[,g] = NEAR[,2]*NEAR[,3]*littlek*NEAR[,8]
+    LEPdf[,g] = NEAR$mat1*NEAR$growth*littlek*NEAR$Survship
     
   } # closes fishing level loop
   return(LEPdf)

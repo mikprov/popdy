@@ -42,7 +42,7 @@ par(mfrow=c(5,3))
 for (i in 1:length(codNames)) { # step through each cod population
   datax <- read.table(file = 
                         paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/k1/'
-                              ,codNames[i], '.txt', sep=''),header=T)
+                              ,codNames[i], '.txt', sep=''),header=T) # read in Leslie matrix
   p_spawn = datax[,1] / sum(datax[,1]) # datax[,1] is LSB at age
                                        # probability of spawning at age = LSB at age/total LSB
   p_table = data.frame(cbind(Age,p_spawn))
