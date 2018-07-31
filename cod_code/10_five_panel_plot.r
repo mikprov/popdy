@@ -13,6 +13,8 @@ library(ggplot2)
 library(gridExtra)
 library(dplyr)
 library(ggrepel)
+library(devtools)
+library(broom)
 
 # 1. create Leslie matricies
 
@@ -99,7 +101,7 @@ cvinfo <- as.list(rep(NA,length(k)))
 names(cvinfo) <- k
 
 # 1st value of k
-y = 1
+y = 1 #y is the index in the vector of k values
 cvs_mode = rep(NA, length(codNames)) #empty vectors 
 mode_age = rep(NA, length(codNames))
 sd_mode = rep(NA, length(codNames))
@@ -249,7 +251,7 @@ rm(temptable,df3,cvinfodf,cvinfo) #clean up
 
 # 5. plot
 # our df for plotting is df4
-p_temp <- ggplot(df4,aes(x=cvs_mode,y=eigenvals)) +
+p_temp <- ggplot(df4,aes(x=cvs_mode,y=eigenvals1.2)) +
   geom_point(aes(col=temp)) + 
   facet_grid(. ~ kval) +
   scale_color_gradientn(colors=rev(rainbow(n=16,start=0,end=0.7))) +
@@ -260,10 +262,10 @@ p_temp <- ggplot(df4,aes(x=cvs_mode,y=eigenvals)) +
                 na.rm = TRUE) +
   theme_bw() + 
   theme(panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
-  ylab(expression(paste(lambda[2],"/","|",lambda[1],"|"))) 
+  ylab(expression(paste("|",lambda[2],"|","/","|",lambda[1],"|"))) 
 
 
-p_mode <- ggplot(df4,aes(x=cvs_mode,y=eigenvals)) +
+p_mode <- ggplot(df4,aes(x=cvs_mode,y=eigenvals1.2)) +
   geom_point(aes(col=mode_age)) + 
   facet_grid(. ~ kval) +
   geom_text_repel(data=df4,
@@ -272,8 +274,10 @@ p_mode <- ggplot(df4,aes(x=cvs_mode,y=eigenvals)) +
                   size = 2,
                   na.rm = TRUE) +
   theme_bw() + 
-  theme(panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
-  ylab(expression(paste("|",lambda[2],"|","/",lambda[1])))
+  theme(axis.title.y = element_text(angle = 0),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black")) +
+  ylab(expression(frac(paste("|",lambda[2],"|"),paste("|",lambda[1],"|"))))
 
 pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/k_panel_plots_lambda2over1.pdf', width=10, height=7)
 p_temp
@@ -281,8 +285,26 @@ p_mode
 dev.off()
 
 
+# --------------
+# regressions
+# --------------
+
+# ---
+# plot & regression: lambda1 vs mode, at k
+m1 <- as.list(rep(NA,length(k)))
+for(n in 1:length(k)){
+  dd <- df4[df4$kval==k[n],]
+  m1[[n]] <- lm(dd$eigenvals1 ~ dd$mode_age)
+}
+m1_tidy_lambda_vs_mode_k0 <- tidy(m1[[1]])
+m1_tidy_lambda_vs_mode_k02 <- tidy(m1[[2]])
+m1_tidy_lambda_vs_mode_k05 <- tidy(m1[[3]])
+m1_tidy_lambda_vs_mode_k08 <- tidy(m1[[4]])
+m1_tidy_lambda_vs_mode_k1 <- tidy(m1[[5]])
+rm(dd,n,m1)
+#confint(m1[[2]])
 # plot lambda1 vs mode, at each k
-ggplot(df4,aes(x=mode_age,y=eigenvals1)) +
+p_lambda_vs_mode <- ggplot(df4,aes(x=mode_age,y=eigenvals1)) +
   geom_point(aes(col=temp)) +
   scale_color_gradientn(colors=rev(rainbow(n=17,start=0,end=0.7))) +
   facet_grid(. ~ kval) +
@@ -293,51 +315,138 @@ ggplot(df4,aes(x=mode_age,y=eigenvals1)) +
                   na.rm = TRUE) +
   theme_bw() + 
   theme(panel.grid.minor = element_blank(), 
-        axis.line = element_line(colour = "black")) +
+        axis.line = element_line(colour = "black"),
+        axis.title.y = element_text(angle = 0)) +
   ylab(expression(paste(lambda[1]))) 
-# regression: lambda1 vs mode, at k
-m1 <- as.list(rep(NA,length(k)))
-for(n in 1:length(k)){
-  dd <- df4[df4$kval==k[n],]
-  m1[[n]] <- lm(dd$eigenvals1 ~ dd$mode_age)
-}
-rm(dd,n)
-summary(m1[[2]])
-#confint(m1)
 
+# ---
 # does stdev of lambda1 narrow at larger k values?
-st <- rep(NA,length(k))
-for (n in 1:length(k)) {
-  dd <- df4[df4$kval==k[n],]
-  st[n] <- sd(dd$eigenvals1)} 
-rm(dd,n)
-dd <- as.data.frame(cbind(k,st))
-m2st <- lm(dd$st~dd$k)
-summary(m2st)
 # does mean of lambda1 change with k values?
-me <- rep(NA,length(k))
-for (n in 1:length(k)) {
-  dd <- df4[df4$kval==k[n],]
+st <- rep(NA,length(k)-1) #subtract 1 bc I'm removing k=0 from regression
+me <- rep(NA,length(k)-1) #subtract 1 bc I'm removing k=0 from regression
+for (n in 1:length(k)-1) {
+  dd <- df4[df4$kval==k[n+1],]
+  st[n] <- sd(dd$eigenvals1)
   me[n] <- mean(dd$eigenvals1)} 
-dd <- as.data.frame(cbind(k,me))
-m2me <- lm(dd$me~dd$k)
-summary(m2me)
-rm(dd,n)
+k.nok0 <- k[2:5]
+ddst <- as.data.frame(cbind(k.nok0,st))
+ddme <- as.data.frame(cbind(k.nok0,me))
+colnames(ddst) <- c("k","st")
+colnames(ddme) <- c("k","me")
+m2st <- lm(ddst$st ~ ddst$k)
+m2me <- lm(ddme$me ~ ddme$k)
+m2_tidy_stlambda_vs_k <- tidy(m2st)
+m2_tidy_melambda_vs_k <- tidy(m2me)
+rm(ddst,ddme,n,m2me,m2st)
+# plot stdev vs k and mean vs k
+ggplot(ddme,aes(x=k,y=me)) +
+  geom_point() + ylab(expression(paste("mean ",lambda[1]))) +
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"))
 
-# regressions for damping ratio vs cv
+ggplot(ddme,aes(x=k,y=st)) +
+  geom_point() + ylab(expression(paste("stdev ",lambda[1]))) +
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"))
+
+
+# ---
+# regressions for damping ratio vs cv at each k
 m3dr <- as.list(rep(NA,length(k)))
 for(n in 1:length(k)){
   dd <- df4[df4$kval==k[n],]
   m3dr[[n]] <- lm(dd$eigenvals1.2~dd$cvs_mode)}
-rm(dd,n)
+m3_tidy_dr_vs_cv_k0 <- tidy(m3dr[[1]])
+m3_tidy_dr_vs_cv_k02 <- tidy(m3dr[[2]])
+m3_tidy_dr_vs_cv_k05 <- tidy(m3dr[[3]])
+m3_tidy_dr_vs_cv_k08 <- tidy(m3dr[[4]])
+m3_tidy_dr_vs_cv_k1 <- tidy(m3dr[[5]])
+rm(dd,n,m3dr)
 
+
+# ---
 # plot & regression for cv vs. mode, cv vs. stdev
-dfsm <- df4[df4$kval==0.2,]
-ggplot(dfsm,aes(x=mode_age,y=cvs_mode)) +
-  geom_point() 
-ggplot(dfsm,aes(x=sd_mode,y=cvs_mode)) +
-  geom_point() 
-m4cv.mode <- lm(dfsm$cvs_mode ~ dfsm$mode_age)
-summary(m4cv.mode)
-m4cv.sd <- lm(dfsm$cvs_mode ~ dfsm$sd_mode)
-summary(m4cv.sd)
+# subset data,df4
+df4.sub <- df4[df4$kval==1,]
+cv.stdev <- tidy(lm(df4.sub$cvs_mode ~ df4.sub$sd_mode))
+cv.mode <- tidy(lm(df4.sub$cvs_mode ~ df4.sub$mode_age))
+
+# plot
+ggplot(df4,aes(x=mode_age,y=cvs_mode)) +
+  geom_point(aes(col=temp)) + 
+  facet_grid(. ~ kval) +
+  scale_color_gradientn(colors=rev(rainbow(n=16,start=0,end=0.7))) +
+  geom_text_repel(data=df4,
+                  aes(label = codNames,color=temp),
+                  segment.color = "grey",
+                  size = 2,
+                  na.rm = TRUE) +
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
+  ylab("CV about the mode") + xlab("age at peak spawning")
+
+ggplot(df4,aes(x=sd_mode,y=cvs_mode)) +
+  geom_point(aes(col=mode_age)) + 
+  facet_grid(. ~ kval) +
+  #scale_color_gradientn(colors=rev(rainbow(n=16,start=0,end=0.7))) +
+  geom_text_repel(data=df4,
+                  aes(label = codNames,color=mode_age),
+                  segment.color = "grey",
+                  size = 2,
+                  na.rm = TRUE) +
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
+  ylab("CV about the mode") + xlab("stdev about the mode")
+
+
+
+# export tables
+write.csv(m1_tidy_lambda_vs_mode_k0,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m1_lambda1vsmode_k0.csv")
+write.csv(m1_tidy_lambda_vs_mode_k02,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m1_lambda1vsmode_k02.csv")
+write.csv(m1_tidy_lambda_vs_mode_k05,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m1_lambda1vsmode_k05.csv")
+write.csv(m1_tidy_lambda_vs_mode_k08,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m1_lambda1vsmode_k08.csv")
+write.csv(m1_tidy_lambda_vs_mode_k1,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m1_lambda1vsmode_k1.csv")
+# combine into one table:
+lambda_vs_mode_kall <- rbind(m1_tidy_lambda_vs_mode_k0,
+                             m1_tidy_lambda_vs_mode_k02,
+                             m1_tidy_lambda_vs_mode_k05,
+                             m1_tidy_lambda_vs_mode_k08,
+                             m1_tidy_lambda_vs_mode_k1)
+write.csv(lambda_vs_mode_kall,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m1_lambda1vsmode_kall.csv")
+
+write.csv(m2_tidy_melambda_vs_k,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m2_melambda1_vs_k.csv")
+write.csv(m2_tidy_stlambda_vs_k,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m2_stlambda1_vs_k.csv")
+
+write.csv(m3_tidy_dr_vs_cv_k0,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m3_dampratio_vs_cv_k0.csv")
+write.csv(m3_tidy_dr_vs_cv_k02,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m3_dampratio_vs_cv_k02.csv")
+write.csv(m3_tidy_dr_vs_cv_k05,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m3_dampratio_vs_cv_k05.csv")
+write.csv(m3_tidy_dr_vs_cv_k08,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m3_dampratio_vs_cv_k08.csv")
+write.csv(m3_tidy_dr_vs_cv_k1,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m3_dampratio_vs_cv_k1.csv")
+
+m3_tidy_dr_vs_cv_kall <- rbind(m3_tidy_dr_vs_cv_k0,
+                               m3_tidy_dr_vs_cv_k02,
+                               m3_tidy_dr_vs_cv_k05,
+                               m3_tidy_dr_vs_cv_k08,
+                               m3_tidy_dr_vs_cv_k1)
+write.csv(m3_tidy_dr_vs_cv_kall,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m3_dampratio_vs_cv_kall.csv")
+
+write.csv(cv.stdev,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m4_tidy_cv_vs_sd.csv")
+write.csv(cv.mode,
+          "C:/Users/provo/Documents/GitHub/popdy/cod_figures/regressions/m4_tidy_cv_vs_mode.csv")
