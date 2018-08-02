@@ -5,6 +5,12 @@
 # load the simulation model
 source("C:/Users/provo/Documents/GitHub/popdy/cod_code/simulation_model_cod_v3.r")
 
+# load functions
+source("C:/Users/provo/Documents/GitHub/popdy/cod_code/2_cod_functions.r")
+
+# load cod data, break into separate populations
+source("C:/Users/provo/Documents/GitHub/popdy/cod_code/0_load_cod_data.r")
+
 # ---
 # read in eigentable - I'm using some information from the table
 eigentable = read.csv("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable5.csv",
@@ -23,16 +29,39 @@ names(outputL) = eigentable$codNames
 timesteps = 1000
 rm_first_timesteps = 100
 alpha = 100
-beta = 1000
+beta = 10000
 initial_eggs = 1000
 sig_r = 0.1
 span.multiplier = 1 # what is this again?
+Alist = as.list(rep(NA,length(datalist))) # store Leslie matrix
+names(Alist) = codNames
+eigenvals1 = rep(NA,length(codNames))
+eigenvals2 = rep(NA,length(codNames))
+eigenvals1.2 = rep(NA,length(codNames))
 
 # ---
 # run simulation - EGGS --> that means output[[2]]
 for (i in 1:length(eigentable$codNames)) { # step through each cod population
-  A = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
-                              ,eigentable$codNames[i], '.txt', sep=''))
+  #A = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
+  #                            ,eigentable$codNames[i], '.txt', sep=''))
+  
+  # --- #
+  # run this section if 'base' Leslie matricies need to be generated
+  # load parms for cod pop i
+  source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',eigentable$codNames[i], '.r', sep=''))
+  # this should load parms: L_inf, K, TEMP, maxage
+  out=assemble_Leslie(data=datalist[[i]], maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
+                      F.halfmax=0,tknot=0)
+  Alist[[i]]=out$A #store Leslie in a list just in case I need it later
+  A = out$A #store Leslie as A for later use
+  #Alist[[i]][1,] <- Alist[[i]][1,]*k[j] #this line multiplies fecundities by k
+  eigenvals1[i] <- extract_first_eigen_value(Alist[[i]]) #calc first eigenvalue
+  eigenvals2[i] <- extract_second_eigen_value(Alist[[i]]) #calc second eigenvalue
+  eigenvals1.2[i] <- eigenvals2[i] / eigenvals1[i] #calc damp ratio
+  # remove pop parms for next loop 
+  rm(K,L_inf,maxage)
+  # --- #
+  
   A = as.matrix(A)
   output = sim_model(A=A, timesteps=timesteps, 
                      alpha=alpha, beta=beta, 
@@ -65,8 +94,26 @@ outputL = vector("list", length(eigentable$codNames)) #create empty list to stor
 names(outputL) = eigentable$codNames
 
 for (i in 1:length(eigentable$codNames)) { # step through each cod population
-  A = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
-                              ,eigentable$codNames[i], '.txt', sep=''))
+  #A = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
+  #                            ,eigentable$codNames[i], '.txt', sep=''))
+  
+  # --- #
+  # run this section if 'base' Leslie matricies need to be generated
+  # load parms for cod pop i
+  source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',eigentable$codNames[i], '.r', sep=''))
+  # this should load parms: L_inf, K, TEMP, maxage
+  out=assemble_Leslie(data=datalist[[i]], maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
+                        F.halfmax=0,tknot=0)
+  Alist[[i]]=out$A #store Leslie in a list just in case I need it later
+  A = out$A #store Leslie as A for later use
+  #Alist[[i]][1,] <- Alist[[i]][1,]*k[j] #this line multiplies fecundities by k
+  eigenvals1[i] <- extract_first_eigen_value(Alist[[i]]) #calc first eigenvalue
+  eigenvals2[i] <- extract_second_eigen_value(Alist[[i]]) #calc second eigenvalue
+  eigenvals1.2[i] <- eigenvals2[i] / eigenvals1[i] #calc damp ratio
+  # remove pop parms for next loop 
+  rm(K,L_inf,maxage)
+  # --- #
+  
   A = as.matrix(A)
   output = sim_model(A=A, timesteps=timesteps, 
                      alpha=alpha, beta=beta, 
@@ -102,8 +149,8 @@ n_sizedf <- subset(n_sizedf, time > 500)
 n_size_long <- melt(n_sizedf, id = "time")
 n_size_long$variable <- factor(n_size_long$variable)
 
-ggplot(rec_long, aes(x=time, y=value, group=variable, color=variable, shape=variable)) +
-  scale_shape_manual(values=1:nlevels(rec_long$variable)) +
+ggplot(n_size_long, aes(x=time, y=value, group=variable, color=variable, shape=variable)) +
+  scale_shape_manual(values=1:nlevels(n_size_long$variable)) +
   geom_point() +
   geom_line() +
   labs(y="N",x="time")
@@ -177,35 +224,35 @@ colnames(cvpops) <- c("codNames", "cvTS")
 
 # ===================================================================
 # 6) normalize the variance (spec)
-maxs_rec <- apply(sp_rec[2:17],2,max) #find max variance for each pop
+maxs_rec <- apply(sp_rec[2:18],2,max) #find max variance for each pop
 spp_rec = cbind( seq(from=0.001111111,to=0.5,by=0.001111111),
-             t(t(sp_rec[2:17])/maxs_rec)) #divide var at all freq by max
+             t(t(sp_rec[2:18])/maxs_rec)) #divide var at all freq by max
 colnames(spp_rec) = c("freq",eigentable$codNames)
 spp_rec = as.data.frame(spp_rec) #use this dataframe to plot 
 
-maxs_egg <- apply(sp_egg[2:17],2,max) #find max variance for each pop
+maxs_egg <- apply(sp_egg[2:18],2,max) #find max variance for each pop
 spp_egg = cbind( seq(from=0.001111111,to=0.5,by=0.001111111),
-                 t(t(sp_egg[2:17])/maxs_egg)) #divide var at all freq by max
+                 t(t(sp_egg[2:18])/maxs_egg)) #divide var at all freq by max
 colnames(spp_egg) = c("freq",eigentable$codNames)
 spp_egg = as.data.frame(spp_egg) #use this dataframe to plot 
 
 # take log() of spec before normalizing, then normalize
 # ---
 # recruits
-sp_rec_log <- log(sp_rec[,2:17])
+sp_rec_log <- log(sp_rec[,2:18])
 sp_rec_log$freq <- freq
-maxs_rec_log <- apply(sp_rec_log[2:17],2,max) #find max variance for each pop
+maxs_rec_log <- apply(sp_rec_log[2:18],2,max) #find max variance for each pop
 spp_rec_log = cbind( seq(from=0.001111111,to=0.5,by=0.001111111),
-                 t(t(sp_rec_log[2:17])/maxs_rec_log)) #divide var at all freq by max
+                 t(t(sp_rec_log[2:18])/maxs_rec_log)) #divide var at all freq by max
 colnames(spp_rec_log) = c("freq",eigentable$codNames)
 spp_rec_log = as.data.frame(spp_rec_log) #use this dataframe to plot 
 # ---
 # eggs
-sp_egg_log <- log(sp_egg[,2:17])
+sp_egg_log <- log(sp_egg[,2:18])
 sp_egg_log$freq <- freq
-maxs_egg_log <- apply(sp_egg_log[2:17],2,max) #find max variance for each pop
+maxs_egg_log <- apply(sp_egg_log[2:18],2,max) #find max variance for each pop
 spp_egg_log = cbind( seq(from=0.001111111,to=0.5,by=0.001111111),
-                     t(t(sp_egg_log[2:17])/maxs_egg_log)) #divide var at all freq by max
+                     t(t(sp_egg_log[2:18])/maxs_egg_log)) #divide var at all freq by max
 colnames(spp_egg_log) = c("freq",eigentable$codNames)
 spp_egg_log = as.data.frame(spp_egg_log) #use this dataframe to plot 
 
@@ -256,9 +303,9 @@ pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/freq_content_oneplot
 splong <- splong_egg
 ggplot(data=splong, aes(x=freq.adjust,y=spec, group=codNames)) + 
   geom_line(aes(color=mode)) +
-  scale_x_continuous(limits=c(0,1.5), 
-                     breaks = round(seq(min(splong$freq.adjust), 1.5, by = 0.5),1)) +
-  scale_y_log10(limits=c(2e-03,1)) + #adjusting scale
+  scale_x_continuous(limits=c(0,1.5) ) + 
+                     #breaks = round(seq(min(splong$freq.adjust), 1.5, by = 0.5),1)) +
+  #scale_y_log10(limits=c(2e-03,1)) + #adjusting scale
   coord_cartesian(xlim = c(0, 2)) + #adjusting scale
   geom_text_repel(data=as.data.frame(splong %>%  
                                        group_by(codNames) %>% 
