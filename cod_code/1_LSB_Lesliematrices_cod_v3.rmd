@@ -11,7 +11,8 @@ output: html_document
 # plan:
 # 1. read cod data, break in separate populations
 # 2. load functions
-
+# 3. execute functions for each population of cod, export Leslie
+# 4. execute functions for each population of cod, export LSB matrices 
 
 rm(list=ls())
 
@@ -49,13 +50,16 @@ names(Alist) = codNames
 for (i in 1:length(names(Alist))) {
   # load parms for cod pop i
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',names(Alist)[i], '.r', sep=''))
+                       
   # this should load parms: L_inf, K, TEMP, maxage
-  Alist[[i]]=assemble_Leslie(data=datalist[[i]], maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
-                             F.halfmax=0,tknot=0)
-   write.table(Alist[[i]],
+  out=assemble_Leslie(data=datalist[[i]], maxage=maxage, K=K, L_inf=L_inf, 
+                      TEMP=TEMP,F.halfmax=0,tknot=0,B0=B0,B1=B1)
+  Alist[[i]]=out$A #output from assemble_Leslie has two matricies, just choose Leslie (A)
+  write.table(Alist[[i]],
               file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/k1_basematrix_maxages/",
                          codNames[i],".txt",sep=""))
-  rm(K,L_inf,maxage)
+  rm(K,L_inf,maxage,TEMP,B0,B1)
+  
 }
 # the matricies made above are considered 'base' matrix. Have not been adjusted. 
 
@@ -66,28 +70,38 @@ for (i in 1:length(names(Alist))) {
 
 #prep for looping
 tknot = 0
-k = 1
-F.halfmax = seq(0,3,by=0.2)
+F.halfmax = 0 #seq(0,3,by=0.2)
 
 # loop over pop data in datalist to generate LSB matrices
 LSBlist = as.list(rep(NA,length(datalist))) # store matrix of LSB vs F
 names(LSBlist) = codNames
+ks = c(0,0.2,0.50,8,1) # different k values
 
-for (i in 1:length(datalist)) { # step through each pop in datalist
+
+for (i in 1:length(LSBlist)) { # step through each pop in datalist
    # load parms for cod pop i
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',names(LSBlist)[i], '.r', sep=''))
   # this should load parms: L_inf, K, TEMP, maxage
   
-  LSBlist[[i]] = calculate_LSB_at_age_by_F(data=datalist[[i]], littlek=k, maxage=maxage, L_inf=L_inf, K=K, TEMP=TEMP, F.halfmax=F.halfmax)
-  # store the output from calculate_LSB.. function in list. output is LSB by age and F
-  write.table(LSBlist[[i]],
-              file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/LSBmatrix_maxages/",
+  lsb.at.k = matrix(0,nrow=maxage,ncol=length(ks)) #create empty matrix to store LSB at age at k
+  for (u in 1:length(ks)) {
+    lsb.at.k[,u] = calculate_LSB_at_age_by_F(data=datalist[[i]], littlek=ks[u], maxage=maxage,
+                                    L_inf=L_inf, K=K, TEMP=TEMP, F.halfmax=F.halfmax,
+                                    B0=B0,B1=B1)
+  }
+  LSBlist[[i]] = lsb.at.k
+  
+  # export table of lsb at age for different k values (need this to calculate new Leslie matricies)
+  #write.table(LSBlist[[i]],
+  #            file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/LSBmatrix_maxages/",
+   #                      codNames[i],".txt",sep=""))
+   write.table(LSBlist[[i]],
+              file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/LSB_k_matrix/",
                          codNames[i],".txt",sep=""))
+  rm(K,L_inf,maxage,TEMP,B0,B1)
 }
 
 
-lsb <- read.table("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/LSBmatrix_maxages/GM.txt")
-matplot(lsb,type="l")
 
 ```
 

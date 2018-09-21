@@ -13,7 +13,7 @@ source("C:/Users/provo/Documents/GitHub/popdy/cod_code/0_load_cod_data.r")
 
 # ---
 # read in eigentable - I'm using some information from the table
-eigentable = read.csv("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable5.csv",
+eigentable = read.csv("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable.csv",
                       header=TRUE,stringsAsFactors = FALSE)
 eigentable = as.data.frame(eigentable)
 
@@ -42,7 +42,7 @@ eigenvals1.2 = rep(NA,length(codNames))
 # ---
 # run simulation - EGGS --> that means output[[2]]
 for (i in 1:length(eigentable$codNames)) { # step through each cod population
-  #A = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
+  #Lout = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
   #                            ,eigentable$codNames[i], '.txt', sep=''))
   
   # --- #

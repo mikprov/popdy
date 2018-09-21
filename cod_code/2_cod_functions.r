@@ -13,7 +13,7 @@ library(faraway)
 #
 
 
-assemble_Leslie <- function(data,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
+assemble_Leslie <- function(data,B0,B1,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
  
   Age=1:maxage
   
@@ -27,7 +27,8 @@ assemble_Leslie <- function(data,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
   MG3 = exp(15.11-1.59*log(L)+0.82*log(L_inf)-3891/(273.15+6.75))  #Gisllason model II (mortality)
   MP = 10^(-0.0066-0.279*log10(L_inf)+0.6543*log10(K)+0.4634*log10(10.56))  #Pauly model (mortality)
   growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3 # weight at age, uses vonB
-  mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age) # proportion mature at age
+  #mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age) # proportion mature at age
+  mat1 = ilogit(B0 + B1*Age) #B0 and B1 are published in Wang et al
   
   # -- assemble NEAR df: use NEAR to calculate Leslie matrix
   NEAR = data.frame(cbind(Age,mat1,growth))  #life table: maturity & size at age
@@ -77,11 +78,11 @@ extract_first_eigen_value <- function(Lesliematrix){
   # eigen value has no imaginary part. but including it for 
   # consistency 
   a.sq = (Re(ev$values[1]))^2 # square the real part of 1st eigenvalue
-  b.sq = (Im(ev$values[1]))^2 # square the imaginary part of 1st eigenvalue
-  firstval = sqrt(a.sq + b.sq) # magnitude of 2nd eigenvalue
+  #b.sq = (Im(ev$values[1]))^2 # square the imaginary part of 1st eigenvalue
+  firstval = sqrt(a.sq)# + b.sq) # magnitude of 2nd eigenvalue
   return(firstval)
   rm(a.sq) # remove from workpace
-  rm(b.sq) # remove from workpace
+  #rm(b.sq) # remove from workpace
 }
 
 
@@ -108,9 +109,8 @@ extract_second_eigen_value <- function(Lesliematrix){
 #   loop over multiple cod populations
 # littlek = the value multiplied across the top row of the Leslie matrix, 
 #   is a measure of fishing pressure (Lauren's analysis)
-source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/','Northsea', '.r', sep=''))
 
-calculate_LSB_at_age_by_F <- function(data,littlek,maxage,L_inf,K,TEMP,F.halfmax){
+calculate_LSB_at_age_by_F <- function(data,B0,B1,maxage,L_inf,K,TEMP,F.halfmax){
   
   Age = 1:maxage
   
@@ -125,7 +125,8 @@ calculate_LSB_at_age_by_F <- function(data,littlek,maxage,L_inf,K,TEMP,F.halfmax
   MP = 10^(-0.0066-0.279*log10(L_inf)+0.6543*log10(K)+0.4634*log10(10.56))  #Pauly model
   #Vul1 = data$CANUM/data$STNUM
   growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3 #weight at age
-  mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age)
+  #mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age)
+  mat1 = ilogit(B0 + B1*Age) #B0 and B1 are published in Wang et al
   
   # -- assemble NEAR df: use NEAR to calculate LSB
   NEAR = data.frame(cbind(Age,mat1,growth))  #cols: age, maturity, growth (size/wt at age)
@@ -148,10 +149,11 @@ calculate_LSB_at_age_by_F <- function(data,littlek,maxage,L_inf,K,TEMP,F.halfmax
       } # closes survivorship loop
     } # closes age loop
     
-    LEPdf[,g] = NEAR$mat1*NEAR$growth*littlek*NEAR$Survship
+    LEPdf[,g] = NEAR$mat1*NEAR$growth*NEAR$Survship
     
   } # closes fishing level loop
   return(LEPdf)
 } # closes function to calculate LSB
+
 
 

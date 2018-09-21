@@ -17,6 +17,7 @@ library(gridExtra)
 # ===================================================================
 # 2) define sim model
 sim_model <- function(A,timesteps,alpha,beta,sig_r,initial_eggs) {
+  age_at_mat <- min(which(!A[1,] ==0)) # set inequality to min threshold for maturity
   maxage = length(A[,1])
   ages = length(seq(1,maxage,by=1))
   N0 = c(initial_eggs, rep(0,ages-1)) #vector, length=num of ages, first age is initial eggs
@@ -42,7 +43,8 @@ sim_model <- function(A,timesteps,alpha,beta,sig_r,initial_eggs) {
       Nt[,t+2] = A %*% Nt[,t+1] 
         
     }
-  Nsize = colSums(Nt) #total population size, sums num at age for each timestep
+  #Nsize = colSums(Nt) #total population size, sums num at age for each timestep
+  Nsize = colSums(Nt[age_at_mat:maxage,]) #sum rows that correspond to spawning adults
   N_t = Nt[1,][2:(timesteps-1)] #Nt is number of adults, aka eggs
   eggs = eggs[2:(timesteps-1)] #egg production
   recruits = recruits[2:(timesteps-1)]
