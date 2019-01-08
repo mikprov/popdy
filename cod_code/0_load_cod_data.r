@@ -28,21 +28,21 @@ cod2J3KLD = subset(cod,AREA=="cod2J3KL")
 
 datalist <- list(NorthseaD,CoasD,W_BalticD,
                  FaroeD,NE_ArcticD,CelticD,
-                 IcelandD,IrishD,KatD,W_ScotlandD,
+                 IcelandD,KatD,W_ScotlandD,
                  NGulfD,GBD,GMD,
                  cod3NOD,cod3MD,cod2J3KLD,
                  cod3PsD)
 
 codNames <- c("Northsea","Coas","W_Baltic",
               "Faroe","NE_Arctic","Celtic",
-              "Iceland","Irish","Kat","W_Scotland",
+              "Iceland","Kat","W_Scotland",
               "NGulf","GB","GM",
               "cod3NO","cod3M","cod2J3KL",
               "cod3Ps")
 
 names(datalist) <- c("Northsea","Coas","W_Baltic",
                      "Faroe","NE_Arctic","Celtic",
-                     "Iceland","Irish","Kat","W_Scotland",
+                     "Iceland","Kat","W_Scotland",
                      "NGulf","GB","GM",
                      "cod3NO","cod3M","cod2J3KL",
                      "cod3Ps")

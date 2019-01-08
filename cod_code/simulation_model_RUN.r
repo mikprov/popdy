@@ -1,4 +1,6 @@
 # Run the simulation model
+# by: mikaela provost
+# last edited: dec 21, 2018
 # ===================================================================
 
 # ---
@@ -28,29 +30,28 @@ names(outputL) = eigentable$codNames
 # set params for simulation:
 timesteps = 1000
 rm_first_timesteps = 100
-alpha = 100
-beta = 10000
+beta = 10000 #note: alpha is different for each pop
 initial_eggs = 1000
 sig_r = 0.1
 span.multiplier = 1 # what is this again?
-Alist = as.list(rep(NA,length(datalist))) # store Leslie matrix
-names(Alist) = codNames
-eigenvals1 = rep(NA,length(codNames))
-eigenvals2 = rep(NA,length(codNames))
-eigenvals1.2 = rep(NA,length(codNames))
+#Alist = as.list(rep(NA,length(datalist))) # store Leslie matrix
+#names(Alist) = codNames
+
 
 # ---
 # run simulation - EGGS --> that means output[[2]]
 for (i in 1:length(eigentable$codNames)) { # step through each cod population
-  #Lout = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
-  #                            ,eigentable$codNames[i], '.txt', sep=''))
   
   # --- #
-  # run this section if 'base' Leslie matricies need to be generated
+  # choose the F values associated with FLEP values
+  # (paste in code from 8_plot_F_vs_FLEP.. not plots, goal is to get vector of F values)
+  
+  # --- #
+  # generate Leslie matricies for different F values
   # load parms for cod pop i
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',eigentable$codNames[i], '.r', sep=''))
   # this should load parms: L_inf, K, TEMP, maxage
-  out=assemble_Leslie(data=datalist[[i]], maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
+  Leslieout=assemble_Leslie(data=datalist[[i]], maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
                       F.halfmax=0,tknot=0)
   Alist[[i]]=out$A #store Leslie in a list just in case I need it later
   A = out$A #store Leslie as A for later use

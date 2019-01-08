@@ -56,7 +56,7 @@ for (i in 1:length(names(Alist))) {
                       TEMP=TEMP,F.halfmax=0,tknot=0,B0=B0,B1=B1)
   Alist[[i]]=out$A #output from assemble_Leslie has two matricies, just choose Leslie (A)
   write.table(Alist[[i]],
-              file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/k1_basematrix_maxages/",
+              file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/",
                          codNames[i],".txt",sep=""))
   rm(K,L_inf,maxage,TEMP,B0,B1)
   

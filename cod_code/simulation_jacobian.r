@@ -5,33 +5,50 @@
 # because we are evaluating the dynamics about the 
 # equilibrium point. 
 
-names(A3dlist) <- codNames
+# Plan:
+# 1. create fake Jacobian matrix
+# 2. can I simulate displacement from equilibrium when noise is added?
 
-set.seed(32)
+
+set.seed(2)
+
+
+toprow <- c(0.01,0.01,0.1,0.2,0.32,0.36)
+toprow <- toprow + 10
+sum(toprow) #should equal 1
+length(toprow) #num age classes
+
+jac <- matrix(0,nrow=length(toprow),ncol=length(toprow))
+jac[1,] <- toprow
+jac[2,1]<-1
+jac[3,2]<-1
+jac[4,3]<-1
+jac[5,4]<-1
+jac[6,5]<-1
+jac
+eigen(jac) #first eigenvalue is 1
 
 tsteps = 1000
-sig_r = 2
-p=8
-t=5
+sig_r = 0.1
 
-for (p in 1:length(A3dlist)) {
-  jac <- A3dlist[[p]][,,8] #choose jac when k=0.9
-  jac1 <- jac[1,] / 0.9
-  jac[1,] <- jac1
-  t0 <- matrix(100,nrow=length(jac[,1]),ncol=1)
-  tseries <- matrix(NA,nrow=length(jac[,1]),ncol=tsteps)
-  tseries[,1] <- t0
-  
-  for (t in 1:(tsteps-1)){
-    step <- jac %*% tseries[,t] #calc the first age vector
-    step[1,1] <- step[1,1]*sig_r*rnorm(1,mean=0,sd=1) #add some noise to age 1
-    tseries[,t+1] <- step #store age vector
-  }
-  plot(colSums(tseries))
-  plot(tseries[1,])
-  matplot(tseries[,1:10])
+t0 <- matrix(100,nrow=length(jac[,1]),ncol=1)
+tseries <- matrix(NA,nrow=length(jac[,1]),ncol=tsteps)
+tseries[,1] <- t0
+age1_before_noise <- rep(NA,length=tsteps)
+age1_after_noise <- rep(NA,length=tsteps)
+set.seed(2)  
+for (t in 1:(tsteps-1)){
+  step <- jac %*% tseries[,t] #calc the first age vector
+  age1_before_noise[t] <- step[1,1]
+  age1_after_noise[t] <- step[1,1]*sig_r*rnorm(1,mean=0,sd=1) #add some noise to age 1
+  step[1,1] <- age1_after_noise[t]
+  tseries[,t+1] <- step #store age vector
 }
-nsize <- colSums(tseries)
+plot(colSums(tseries))
+plot(age1_after_noise)
+plot(age1_before_noise)
+plot(exp(sig_r*rnorm(1000,mean=0,sd=1)))
+
 
 
 

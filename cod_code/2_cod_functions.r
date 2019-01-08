@@ -13,21 +13,22 @@ library(faraway)
 #
 
 
-assemble_Leslie <- function(data,B0,B1,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
+assemble_Leslie <- function(B0,B1,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
  
   Age=1:maxage
   
-  data = subset(data,Yearclass>1959)  #yearclasses vary among stocks
-  data = subset(data,Yearclass<1990)
+  #data = subset(data,Yearclass>1959)  #yearclasses vary among stocks
+  #data = subset(data,Yearclass<1990)
   
   # -- calculate maturity, weight parms
-  mod.mat = glm(MATPROP~AGE,family=binomial,data=data) #gives maturity beta coefficients
-  L=L_inf*(1-exp(-K*Age)) #length at age
+  #mod.mat = glm(MATPROP~AGE,family=binomial,data=data) #gives maturity beta coefficients
+  #L=L_inf*(1-exp(-K*Age)) #length at age
   #MG=exp(0.55-1.61*log(L)+1.44*log(L_inf)+log(K)) #Gislason model II
-  MG3 = exp(15.11-1.59*log(L)+0.82*log(L_inf)-3891/(273.15+6.75))  #Gisllason model II (mortality)
-  MP = 10^(-0.0066-0.279*log10(L_inf)+0.6543*log10(K)+0.4634*log10(10.56))  #Pauly model (mortality)
-  growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3 # weight at age, uses vonB
+  #MG3 = exp(15.11-1.59*log(L)+0.82*log(L_inf)-3891/(273.15+6.75))  #Gisllason model II (mortality)
+  #MP = 10^(-0.0066-0.279*log10(L_inf)+0.6543*log10(K)+0.4634*log10(10.56))  #Pauly model (mortality)
   #mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age) # proportion mature at age
+  
+  growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3 # weight at age, uses vonB
   mat1 = ilogit(B0 + B1*Age) #B0 and B1 are published in Wang et al
   
   # -- assemble NEAR df: use NEAR to calculate Leslie matrix
@@ -75,11 +76,10 @@ extract_first_eigen_value <- function(Lesliematrix){
   # get leading eigenvalue - check to make sure it's positive
   ev = eigen(Lesliematrix)
   # squaring the imaginary part is not necessary b/c the first 
-  # eigen value has no imaginary part. but including it for 
-  # consistency 
+  # eigen value has no imaginary part. 
   a.sq = (Re(ev$values[1]))^2 # square the real part of 1st eigenvalue
   #b.sq = (Im(ev$values[1]))^2 # square the imaginary part of 1st eigenvalue
-  firstval = sqrt(a.sq)# + b.sq) # magnitude of 2nd eigenvalue
+  firstval = sqrt(a.sq)# + b.sq) # magnitude of 1st eigenvalue
   return(firstval)
   rm(a.sq) # remove from workpace
   #rm(b.sq) # remove from workpace
@@ -88,7 +88,7 @@ extract_first_eigen_value <- function(Lesliematrix){
 
 extract_second_eigen_value <- function(Lesliematrix){
   # get magnitude of second eigenvalue
-  # think of real value on x-axis, imaginary on y-axis
+  # think of real value on x-axis, imaginary value on y-axis
   # magnitude is the vector between them
   ev = eigen(Lesliematrix)
   a.sq = (Re(ev$values[2]))^2 # square the real part of 2nd eigenvalue
@@ -114,44 +114,42 @@ calculate_LSB_at_age_by_F <- function(data,B0,B1,maxage,L_inf,K,TEMP,F.halfmax){
   
   Age = 1:maxage
   
-  data = subset(data,Yearclass>1959)  #yearclasses vary among stocks
-  data = subset(data,Yearclass<1990)
+  #data = subset(data,Yearclass>1959)  #yearclasses vary among stocks, 
+  #data = subset(data,Yearclass<1990)  #based on Hu-Yui code
   
   # -- calculate maturity, weight parms
-  mod.mat = glm(MATPROP~AGE,family=binomial,data=data) #gives maturity beta coefficients
-  L=L_inf*(1-exp(-K*Age))
+  #mod.mat = glm(MATPROP~AGE,family=binomial,data=data) #gives maturity beta coefficients
+  #L=L_inf*(1-exp(-K*Age)) #calculate length at age, vonB
+  #Hu-Yui calculated 3 equations for mortality, don't need them for now
   #MG=exp(0.55-1.61*log(L)+1.44*log(L_inf)+log(K)) #Gislason model II
-  MG3 = exp(15.11-1.59*log(L)+0.82*log(L_inf)-3891/(273.15+6.75))  #Gisllason model III
-  MP = 10^(-0.0066-0.279*log10(L_inf)+0.6543*log10(K)+0.4634*log10(10.56))  #Pauly model
+  #MG3 = exp(15.11-1.59*log(L)+0.82*log(L_inf)-3891/(273.15+6.75))  #Gisllason model III
+  #MP = 10^(-0.0066-0.279*log10(L_inf)+0.6543*log10(K)+0.4634*log10(10.56))  #Pauly model
   #Vul1 = data$CANUM/data$STNUM
+  #mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age) 
+    #above, I was using coefficients I calculated, but Wang et al.
+    #published them, so just using those (B0 and B1, below)
   growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3 #weight at age
-  #mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age)
   mat1 = ilogit(B0 + B1*Age) #B0 and B1 are published in Wang et al
   
   # -- assemble NEAR df: use NEAR to calculate LSB
-  NEAR = data.frame(cbind(Age,mat1,growth))  #cols: age, maturity, growth (size/wt at age)
+  NEAR = data.frame(cbind(Age,mat1,growth))  #cols: age, prop maturity at age, growth (wt at age)
   NEAR$Vul1 = mat1 #use maturity ogive for selectivity ogive -- see Wang et al for justification
   NEAR$M_G= 0.19+0.058*TEMP   #mortality at age, regression fit of Fig. 5c, 'TEMP' is loaded in parms set
   
   # -- LEPdf: rows ~ age, col ~ fishing levels (F.halfmax), observations is egg production at age
-  LEPdf = matrix(0,length(Age),length(F.halfmax))
+  LEPdf = matrix(0,nrow=length(Age),ncol=length(F.halfmax))
   for(g in 1:length(F.halfmax)){ # step through each fishing level, for the first column in LEPdf
-    for(j in 1:length(Age)){ # step through ages, or rows in the first column
-      NEAR$F[j] = NEAR$Vul1[j]*F.halfmax[g]	# Vul1 should be selectivity, but it's mat
-      # calculate F = selectivity * F rate
-      NEAR$SURV = exp(-(NEAR$F+NEAR$M_G)) #SURV is the fraction surviving at each age
+   fishing_at_age = NEAR$Vul1*F.halfmax[g]	# Vul1 should be selectivity, but it's mat. F=selectivity*F rate
+   surv_at_age = exp(-(fishing_at_age+NEAR$M_G)) #SURV is the fraction surviving at each age
+   l_suba <- rep(NA,length=length(Age)) #create empty vector to store l_suba
+   
+   for(j in 1:length(Age)){ #for each age
+      l_suba[j] = surv_at_age[1]^(j-1) } #l_suba = survival^a starting at 0
       
-      NEAR$Survship = 0 # set up column for survivorship (amount or fraction present at age)
-      NEAR$Survship[1] = 1
-      
-      for(h in 1:(nrow(NEAR)-1)){ # step through ages to calc survivorship
-        NEAR$Survship[h+1] = NEAR$Survship[h]*NEAR$SURV[h] #amount present at age
-      } # closes survivorship loop
-    } # closes age loop
-    
-    LEPdf[,g] = NEAR$mat1*NEAR$growth*NEAR$Survship
+   LEPdf[,g] = NEAR$mat1*NEAR$growth*l_suba #prop mat at age * wt at age * survival from age 0 to age a
     
   } # closes fishing level loop
+  
   return(LEPdf)
 } # closes function to calculate LSB
 

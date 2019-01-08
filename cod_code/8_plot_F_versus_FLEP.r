@@ -4,6 +4,7 @@
 # 1. 
 
 library(gridExtra)
+library(reshape2)
 # ---
 # 1) Define fishing levels 
 # ---
@@ -40,14 +41,12 @@ for (i in 1:length(datalist)) { # step through each pop in datalist
   # load parms for cod pop i
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',names(LSBlist)[i], '.r', sep=''))
   # this should load parms: L_inf, K (vonB), TEMP, maxage
-  LSBlist[[i]] = calculate_LSB_at_age_by_F(data=datalist[[i]], 
-                                           littlek=k, 
-                                           maxage=maxage, 
+  LSBlist[[i]] = calculate_LSB_at_age_by_F(maxage=maxage, 
                                            L_inf=L_inf, 
                                            K=K, 
                                            TEMP=TEMP, 
-                                           F.halfmax=F.halfmax)
-  
+                                           F.halfmax=F.halfmax,
+                                           B0=B0,B1=B1)
   # here I calculate FLEP: LSB at all F levels / LSB at F=0
   FLEP[,i] <- colSums(LSBlist[[i]]) / sum(LSBlist[[i]][,1])
   
@@ -68,6 +67,13 @@ ggplot(data=FLEPlong, aes(x=F.halfmax,y=log(value), color=variable, linetype=var
   theme_classic() +
   xlab("F") +
   ylab("ln(FLEP)")
+
+ggplot(data=FLEPlong, aes(x=F.halfmax,y=value, color=variable, linetype=variable, shape=variable)) + 
+  geom_line() +
+  # scale_linetype_manual(values=c(rep("solid",8),rep(dashed)))
+  theme_classic() +
+  xlab("F") +
+  ylab("FLEP")
 dev.off()
 # ----
 # plot egg production at age for a couple F values
@@ -142,7 +148,7 @@ for (i in 1:length(LSBlist)) {
     ggtitle(paste(names(LSBlist)[i]))
 } 
 pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/egg_production_for_diff_Fs.pdf', width=7, height=15)
-do.call(grid.arrange,c(p,ncol=2))
+do.call(grid.arrange,c(p,ncol=3))
 dev.off()
 
 

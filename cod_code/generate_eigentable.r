@@ -40,22 +40,20 @@ codNames <- c("Northsea","Coas","W_Baltic",
               "cod3NO","cod3M","cod2J3KL",
               "cod3Ps")
 
-#first = rep(NA, length(codNames))
-#second= rep(NA, length(codNames))
-#dampratio = rep(NA, length(codNames))
+first = rep(NA, length(codNames))
+second= rep(NA, length(codNames))
+dampratio = rep(NA, length(codNames))
 
-
-
-#for (i in 1:length(codNames)) {
-  # for each pop i, load the Leslie matrix
-#  A = read.table(file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/k1_basematrix_maxages/",
-#                    codNames[i],".txt",sep=""))
-#  first[i] <- extract_first_eigen_value(A) #store lambda1
-#  second[i] <- extract_second_eigen_value(A) #store lambda2
-#  dampratio[i] <- abs(second[i])/first[i]
-#}
-#table1 <- data.frame(cbind(codNames, first, second, dampratio))
-#rm(i,A,first,second,dampratio)
+for (i in 1:length(codNames)) {
+   
+  A = read.table(file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/k1_basematrix_maxages/",
+                    codNames[i],".txt",sep=""))
+  first[i] <- extract_first_eigen_value(A) #store lambda1
+  second[i] <- extract_second_eigen_value(A) #store lambda2
+  dampratio[i] <- abs(second[i])/first[i]
+}
+table1 <- data.frame(cbind(codNames, first, second, dampratio))
+rm(i,A,first,second,dampratio)
 
 
 
@@ -111,15 +109,16 @@ for (i in 1:length(codNames)) {
 table4<- data.frame(cbind(codNames, max_ages))
 table4$max_ages <- as.numeric(as.character(table4$max_ages))
 rm(i,pop,max_ages,max_ages_occurances)
-
+# change maxage for cod2J3KL from 20 to 17, based on stock assessment
+table4[table4$codNames == "cod2J3KL",]$max_ages <- 17
 
 # ---
 # 6. combine all information into a single table, export table
 # ---
-#e1 <- merge(table2,by="codNames")
-e2 <- merge(table2,table3,by="codNames")
+e1 <- merge(table1,table2,by="codNames")
+e2 <- merge(e1,table3,by="codNames")
 eigentable<- merge(e2,table4,by="codNames")
-rm(e2)
+rm(e2,e1)
 write.csv(eigentable,file="C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable.csv")
 
 

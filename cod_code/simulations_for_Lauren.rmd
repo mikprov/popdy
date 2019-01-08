@@ -1,0 +1,460 @@
+---
+title: ""
+author: "Mikaela Provost"
+date: "9/27/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# This code simulates cod populations at different k slopes.
+
+### Plan
+1. Calculate LSB-at-age for each pop -- CHOOSE 1 OR 2
+2. Generate modified Leslie matricies at each k value
+3. Run simulations (age-structure density dependence model)
+4. Plot timeseries of recruits & egg production
+5. Plot spec for each pop at different k values
+6. Calculate AUC (don't have code for plotting AUC yet!)
+
+```{r, warning=FALSE}
+# save workspace - Lauren, you don't do this
+#save.image("C:/Users/provo/Documents/GitHub/popdy/cod_code/simulations_for_Lauren.RData")
+#history("C:/Users/provo/Documents/GitHub/popdy/cod_code/simulations_for_Lauren.Rhistory")
+# load the workspace - Lauren, do this!!
+load("C:/Users/provo/Documents/GitHub/popdy/cod_code/simulations_for_Lauren.RData")
+# --
+# load functions, libraries
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(plyr)
+library(ggrepel)
+library(devtools)
+library(broom)
+# load functions
+source("C:/Users/provo/Documents/GitHub/popdy/cod_code/2_cod_functions.r")
+# load cod data
+source("C:/Users/provo/Documents/GitHub/popdy/cod_code/0_load_cod_data.r") 
+# load sim model, this is an age-structured model with BH density dependence. 
+source("C:/Users/provo/Documents/GitHub/popdy/cod_code/simulation_model_cod_v3.r") 
+
+# read in eigentable - I'm using some information from this table
+# the columns for 'first' and 'second' and 'dampratio' are lambda1,
+# lambda2, and abs(lambda2)/lambda1 respectivly, from Leslie matricies  
+eigentable <- read.csv(file="C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable.csv",header=T)
+eigentable = as.data.frame(eigentable)
+```
+###1. Calculate LSB-at-age for each pop.
+####This will be used later in the 'modified' Leslie matrix.
+```{r, warning=FALSE}
+# ---
+# some set up
+F.halfmax = 0 #for now, F is 0 (some of the functions have the option to add F)
+tknot =0 #used in vonB eq. which is in calculate_LSB_at_age_by_F() function
+ks = c(0.2,0.5,0.8,1) #set k values
+
+# ---
+# For each popuation, calculate LSB at age. This will be used later  
+# to generate Leslie matricies (note: modified Leslies, with survivals=1)
+# LSB at age will be the top row of the (modified) Leslie matrix, 
+# we use relative LSB so each value in the top row is divided by the 
+# sum of top row values. 
+# Note: values of k slope are NOT incorporated here. That will be later.
+LSBlist <- as.list(rep(NA,length(codNames))) #LSB at age for pops stored here
+names(LSBlist) <- codNames
+
+for (i in 1:length(LSBlist)) { # for each population
+  # load parms for cod pop i
+  source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',names(LSBlist)[i], '.r', sep=''))
+  # this should load parms: L_inf, K, TEMP, maxage, B0, B1, tknot=0
+  
+  # for each pop calc LSB at age (note: k is not incorporated here)
+  lsb = calculate_LSB_at_age_by_F(data=datalist[[i]], maxage=maxage,
+                                             L_inf=L_inf, K=K, TEMP=TEMP, F.halfmax=F.halfmax,
+                                             B0=B0,B1=B1)
+  LSBlist[[i]] = lsb #LSBlist should have length of codNames
+  #LSB = wt at age * prop mature at age * survival at age
+}
+rm(i,lsb,TEMP,B0,B1,K,L_inf)
+```
+
+###2. Using LSB at age (for each pop), generate rescaled Leslie matricies at each k value. Top row=fecunity at age * surv 
+####I use 'rescaled Leslie matrix' to mean the Leslie matrix where survivals and fecundities are isolated to the top row, and 1's along the subdiagonal.
+####I use the 'Jacobian' in option #2. Here the Jacobian is the fecundities on the top multiplied by the derivative of the egg-recruit curve at equlibrium. See Ch. 4 in Loo's book for explaination. 
+```{r,warning=FALSE}
+A3dlist = as.list(rep(NA,length(LSBlist))) #list to store Leslie arrays for each pop 
+names(A3dlist) = names(LSBlist) #add cod Names to list
+alpha = 1
+for (i in 1:length(LSBlist)) { #for each pop i
+  
+  lsb = LSBlist[[i]] #extract LSB vector
+  Alist = as.list(rep(NA,length(ks))) #create an empty list for storing 
+                                      #Leslie matricies at diff k values
+  for (j in 1:length(ks)) { #for eack k slope
+    
+    A = matrix(0,nrow=length(lsb),ncol=length(lsb)) #create an empty matrix
+    
+    # CHOOSE: 1 OR 2
+    # (1) this is to create the rescaled Leslie matrix, top=fecundity*surv
+    #A[1,]=lsb/sum(lsb) #fill in relative LSB at age across top row
+    #A[1,]=lsb #fill in absolute LSB 
+    #A[1,]=A[1,]*ks[j]
+    
+    # (2) this creates the Jacobian matrix, with survivals=1 on subdiagonal
+    A[1,]=lsb #use this if using absolute LSB at age
+    A[1,]=A[1,]*(1/(alpha*(sum(lsb))^2)) #see ch 4 in Loo's book
+    A[1,]=A[1,]/sum(A[1,]) 
+    A[1,]=A[1,]*ks[j] #multiply the top by k
+    
+    for(a in 2:length(A[,1])-1){ #filling in survivals
+      A[a+1,a]=1} #fill in survival of 1 on subdiagonal
+    
+    Alist[[j]] = A #this is a rescaled Leslie matrix for pop i at k value j
+    
+  }
+  A3d = array(unlist(Alist),dim=c(length(A[,1]),length(A[,1]),length(ks)))
+    #line above takes all the matricies stored in Alist and converts them
+    #into a 3d array: rows=ages, cols=ages, 3rd dim=k values
+    #remember, Alist has matricies associated with diff k values for pop i
+  A3dlist[[i]] = A3d #store array for pop i 
+}
+rm(i,j,a,Alist,A3d) #clean up
+
+# Check to make sure top row sums to 1 when k=1, etc.
+# Choose Northsea pop for example.
+sum(A3dlist[["Northsea"]][,,1][1,])#sum top row, should = 0.2 (k=0.2)
+sum(A3dlist[["Northsea"]][,,2][1,])#sum top row, should = 0.5 (k=0.5)
+sum(A3dlist[["Northsea"]][,,3][1,])#sum top row, should = 0.8 (k=0.8)
+sum(A3dlist[["Northsea"]][,,4][1,])#sum top row, should = 1 (k=1)
+# Check lambda1 of matricies at the different k values. 
+extract_first_eigen_value(A3dlist[["Northsea"]][,,1]) #k=0.2
+extract_first_eigen_value(A3dlist[["Northsea"]][,,2]) #k=0.5
+extract_first_eigen_value(A3dlist[["Northsea"]][,,3]) #k=0.8
+extract_first_eigen_value(A3dlist[["Northsea"]][,,4]) #k=1
+# Let's plot eigenvalues associated with different CVs at different k values
+evslist = as.list(rep(NA,length(codNames)))
+names(evslist) = names(LSBlist)
+for(p in 1:length(A3dlist)){
+  onearray = A3dlist[[p]]
+  evs=rep(NA,length(ks))
+  evs2=rep(NA,length(ks))
+  for(k in 1:length(ks)){
+    mat=onearray[,,k]
+    evs[k]=extract_first_eigen_value(mat)
+    evs2[k]=extract_second_eigen_value(mat)
+  }
+  ee=cbind(ks,evs,evs2)
+  evslist[[p]]=ee
+}
+evsdf <- ldply(evslist,data.frame)
+names(evsdf) <- c("codNames","ks","first_eigen","second_eigen")
+evsdf$ratio <- evsdf$second_eigen / evsdf$first_eigen
+evsdf <- merge(evsdf,eigentable[c("codNames","temp","mode_age",
+                                  "sd_mode","max_ages","cvs_mode")],all.x=TRUE)
+long <- melt(evsdf,id.vars = "codNames")
+head(long)
+# plot 5 panel plot, using rescaled Leslie matrix with relative fecundity
+# COME BACK TO THIS
+ggplot(evsdf[long$variable=="first_eigen",],aes(x=cvs_mode,y=value)) +
+  geom_point(aes(col=mode_age)) + 
+  geom_smooth(method="lm",se=FALSE,color="black") +
+  facet_grid(. ~ variable) +
+  scale_y_continuous(limits=c(0,1.1)) +
+  geom_text_repel(data=long[long$eigen=="lambda1",],
+                  aes(label = codNames,color=mode_age),
+                  segment.color = "grey",
+                  size = 2,
+                  na.rm = TRUE) +
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.title.y = element_text(angle = 0)) +
+  ylab(expression(paste(lambda[1]))) 
+
+```
+###2(a). Run simulations (w/o density dependence)
+####Using the Jacobian matrix, I simulate the deviation from equilibrium after I add in noise in the first age class. This simulation is not abundance, I should have both positive and negative values as the population dips below and rises above the equilibrium point. 
+
+```{r}
+timesteps=1000
+sig_r=0.2
+set.seed(1)
+plot(sig_r*exp(rnorm(timesteps,mean=0,sd=1))) #adding noise, not multiplying it
+for (p in 1:length(A3dlist)) { #for each cod pop
+  jac <- A3dlist[["W_Scotland"]][,,3] #choose the rescaled Leslie matrix associated with k=1
+  t0 <- matrix(0,nrow=length(jac[,1]),ncol=1)
+  t0[,1] <- c(1,0.4747,0.4747^2,0.474^3,0.4747^4,
+              0.4747^5,0.4747^6)
+  #t0[,1] <- t0[,1]*100
+  tseries <- matrix(NA,nrow=length(jac[,1]),ncol=timesteps)
+  tseries[,1] <- t0
+  
+  for (t in 1:(timesteps-1)){
+    #step <- jac %*% tseries[,t] #calc the age vector in the next time step (step)
+    step <- jac %*% t0 #if we want to keep SAD constant at each time step
+    step[1,1] <- step[1,1]+(sig_r*rnorm(1,mean=0,sd=1)) #add or multiply some noise to age 1
+    tseries[,t] <- step #store new age vector (with noise in age 1) in tseries matrix at t+1
+  }
+  tseries[,1:10]
+  plot(tseries[7,])
+  plot(colSums(tseries),type="l")
+  plot(tseries[1,],type="l")
+}
+nsize <- colSums(tseries)
+matplot(t(tseries[,300:315]), type="l")
+plot(nsize, main="timeseries of W_Scotland pop size, rescaled Leslie w/relative fecundity",
+     xlab="year",ylab="abundance",type="l")
+# -----
+
+
+```
+###3. Run simulations (age-structure with density dependence) 
+####We now have modified Leslie matricies for each population at different k values. Let's run simulations. There are two ways to simulate: 1) use the age-structured model with BH density dependence to simulate population abundance over time, and 2) use the modified Leslie matrix to simulate deviations from equilibrium (aka linearized around the equilibirum). First use the age-structure model with BH density dependence. 
+```{r,warning=FALSE}
+timesteps = 1000
+rm_first_timesteps = 100 #remove transitory effects for spectral analysis
+alpha = 0.000982 #constant for all pops and k values
+beta = 1000 #constant for all pops and k values
+initial_eggs = 1000 
+sig_r = 0.1 
+span.multiplier = 1 # what is this again? something to do with spec.pgram
+```
+
+#### The code below simulates each population, at each k value, using 'sim_model' a function I wrote in simulation_model_cod_v3.r (see that script for details). The important output from sim_model is 2 vectors: timeseries of eggs and recruits. 
+```{r}
+freq = seq(from=0.001111111, to=0.5, by=0.001111111) #all frequencies, for plotting later
+output.spec.3dList = as.list(rep(NA,length(A3dlist))) #list of spec output for each pop 
+
+raw.3dList = as.list(rep(NA,length(A3dlist))) #list of timeseries output for each pop
+names(raw.3dList) = names(A3dlist) #add names
+
+# setting 'span' - a vector of odd integers to specify the smoothers
+tmp <- ceiling(sqrt(length(1:(timesteps-rm_first_timesteps-1)))) #square root of timeseries length, rounded
+if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp} #make it odd, if the square root is even
+m = m * span.multiplier
+    
+for (y in 1:length(A3dlist)) { #for pop y
+  A3d = A3dlist[[y]] #choose the 3d array of matricies, use these to simulate below
+  
+  outputL.raw = as.list(rep(NA,length(ks))) #create temp empty list for storing output at each k 
+  outputL.spec = as.list(rep(NA,length(ks)))#create temp empty list for storing output at each k
+                         
+  for (k in 1:length(ks)) { #for each k value
+    
+    A = A3d[,,k] #choose the Leslie matrix for this k value
+   
+    output = sim_model(A=A, timesteps=timesteps, #simulate
+                       alpha=alpha, beta=beta, 
+                       sig_r=sig_r, initial_eggs=initial_eggs)  
+    outputL.raw[[k]] = do.call(cbind,output[c(2,3)]) #save sim output for each pop 
+    
+    # --- do the spectral analysis
+    spec_all = matrix(NA,nrow=length(freq),ncol=2) # matrix to store spec of egg, recruits
+    
+    #extract simulation of egg timeseries from model output
+    spec_egg = spec.pgram(x=output[[2]][rm_first_timesteps:(timesteps-2)], 
+                          spans=c(m,m),plot = FALSE)
+    spec_all[,1] <- spec_egg$spec #save spec output for plotting pops together, Helen Wearing says to multiply by 2
+    
+    #extract sim of recruits
+    spec_rec = spec.pgram(x=output[[3]][rm_first_timesteps:(timesteps-2)], 
+                          spans=c(m,m),plot = FALSE)
+    spec_all[,2] = spec_rec$spec #save spec output for plotting pops together, Helen Wearing says to multiply by 2
+    
+    outputL.spec[[k]] = spec_all
+  }
+  output.spec.3d = array(unlist(outputL.spec),dim=c(length(freq),length(spec_all[1,]),length(ks)))
+  output.spec.3dList[[y]] = output.spec.3d #store array 
+  output.raw.3d = array(unlist(outputL.raw), dim=c(length(outputL.raw[[1]][,1]),2,length(ks)))
+  raw.3dList[[y]] = output.raw.3d
+}
+
+# convert this into a dataframe
+names(output.spec.3dList) = names(A3dlist)
+# for each pop, 3d object: 3 rows=eggs/rec/adu, col=spec output, stack=diff k 
+```
+###4. Plot timeseries to make sure things are looking good.
+#### Try plotting the egg or recruit timeseries at different k values for individual populations. First, transform raw.3dList into a df for plotting. I use 'raw' to indicate timeseries data (vs spec output). 
+```{r,warning=FALSE}
+rawpoplist = as.list(rep(NA,length(raw.3dList)))
+names(rawpoplist) <- names(raw.3dList)
+
+for (e in 1:length(raw.3dList)) { #for each pop
+  a = raw.3dList[[e]] #convert one pop array to df at a time
+  
+  rawlist = as.list(rep(NA,length(ks))) #placeholder for storing spec output at k
+  
+  for (k in 1:length(ks)) { #for each k, convert sim output into df
+  
+    rawout = as.data.frame(a[,,k]) #choose simout for each k
+    names(rawout) = c("eggs","recruits")
+    rawout$timesteps = seq(from=1,to=length(rawout$eggs),by=1)
+    rawlong = melt(rawout,id.vars="timesteps")
+    names(rawlong) <- c("timesteps","out.type","value")
+    rawlong$kval <- rep(ks[k],length=length(rawlong$timesteps))
+    rawlist[[k]] = rawlong #store sim output df for each k
+  } 
+  df <- ldply(rawlist, data.frame)
+  df$codNames <- rep(codNames[e],length=length(df$timesteps))
+  rawpoplist[[e]] = df
+}
+rm(df,rawout,rawlong,rawlist)
+raw.out.df <- ldply(rawpoplist, data.frame)
+raw.out.df$kval <- factor(raw.out.df$kval)
+raw.out.df$codNames <- factor(raw.out.df$codNames)
+#Merge temp, peak spawning age, CV of spawning biomass distribution into df
+#May be useful for plotting
+raw.out.df <- merge(raw.out.df,eigentable[c("codNames","temp")],all.x=TRUE)
+raw.out.df <- merge(raw.out.df,eigentable[c("codNames","mode_age")],all.x=TRUE)
+raw.out.df <- merge(raw.out.df,eigentable[c("codNames","sd_mode")],all.x=TRUE)
+raw.out.df <- merge(raw.out.df,eigentable[c("codNames","max_ages")],all.x=TRUE)
+raw.out.df <- merge(raw.out.df,eigentable[c("codNames","cvs_mode")],all.x=TRUE)
+raw.out.df <- mutate(raw.out.df, codNames = reorder(codNames, mode_age))#order plots by peak spawning age
+```
+####Plot timeseries 8 of the 16 pops. Too hard to see if I plot all.
+```{r, warning=FALSE}
+# Plot eggs
+ggplot(raw.out.df[raw.out.df$out.type == "eggs" & raw.out.df$codNames %in% c("Celtic","W_Scotland","Faroe","GB"),],
+            aes(x=timesteps,y=value,group=kval)) +
+  geom_line(aes(color=kval)) +
+  facet_grid(codNames~.) +
+  labs(x="timestep",y="eggs")
+ggplot(raw.out.df[raw.out.df$out.type == "eggs" & raw.out.df$codNames %in% c("cod3Ps","Iceland","NGulf","NE_Arctic"),],
+            aes(x=timesteps,y=value,group=kval)) +
+  geom_line(aes(color=kval)) +
+  facet_grid(codNames~.) +
+  labs(x="timestep",y="eggs")
+
+# Plot recruits
+ggplot(raw.out.df[raw.out.df$out.type == "recruits" & raw.out.df$codNames %in% c("Celtic","W_Scotland","Faroe","GB"),],
+            aes(x=timesteps,y=value,group=kval)) +
+  geom_line(aes(color=kval)) +
+  facet_grid(codNames~.) +
+  labs(x="timestep",y="recruits (note: y axis starts at 850)") +
+  scale_y_continuous(limits = c(850, 1000))
+ggplot(raw.out.df[raw.out.df$out.type == "recruits" & raw.out.df$codNames %in% c("cod3Ps","Iceland","NGulf","NE_Arctic"),],
+            aes(x=timesteps,y=value,group=kval)) +
+  geom_line(aes(color=kval)) +
+  facet_grid(codNames~.) +
+  labs(x="timestep",y="recruits (note: y axis starts at 850)") +
+  scale_y_continuous(limits = c(850, 1000))
+#pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/timeseries_plots_for_kval_JacBH.pdf', width=30, height=6)
+
+#dev.off()
+```
+###5. Plot spec for each pop at different k values.
+#### Like above, the spec output is stored in a list of 3D arrays (output.spec.3dlist). Each array: 450 rows = spec associated with each freq value, 2 cols = eggs, recruits, 3rd dim = k values.  The code below converts the list of arrays into a df.
+```{r,warning=FALSE}
+simpoplist = as.list(rep(NA,length(output.spec.3dList)))
+names(simpoplist) <- names(output.spec.3dList)
+
+for (e in 1:length(output.spec.3dList)) { #for each pop
+  a = output.spec.3dList[[e]] #convert one pop array to df at a time
+  
+  simlist = as.list(rep(NA,length(ks))) #placeholder for storing spec output at k
+  
+  for (k in 1:length(ks)) { #for each k, convert sim output into df
+  
+    simout = as.data.frame(a[,,k]) #choose simout for each k
+    names(simout) = c("eggs","recruits")
+    simout$freq = freq
+    simlong = melt(simout,id.vars="freq")
+    names(simlong) <- c("freq","out.type","value")
+    simlong$kval <- rep(ks[k],length=length(freq))
+    simlist[[k]] = simlong #store sim output df for each k
+  } 
+  df <- ldply(simlist, data.frame)
+  df$codNames <- rep(codNames[e],length=length(df$freq))
+  simpoplist[[e]] = df
+}
+
+spec.out.df <- ldply(simpoplist, data.frame)
+#table(spec.out.df$codNames)
+```
+
+
+#### Plotting spec output.
+```{r}
+#Merge temp, peak spawning age, CV of spawning biomass distribution into df
+#May be useful for plotting
+spec.out.df <- merge(spec.out.df,eigentable[c("codNames","temp")],all.x=TRUE)
+spec.out.df <- merge(spec.out.df,eigentable[c("codNames","mode_age")],all.x=TRUE)
+spec.out.df <- merge(spec.out.df,eigentable[c("codNames","sd_mode")],all.x=TRUE)
+spec.out.df <- merge(spec.out.df,eigentable[c("codNames","max_ages")],all.x=TRUE)
+spec.out.df <- merge(spec.out.df,eigentable[c("codNames","cvs_mode")],all.x=TRUE)
+spec.out.df <- mutate(spec.out.df, codNames = reorder(codNames, mode_age))#order plots by peak spawning age
+
+# Plot spectra
+ggplot(spec.out.df[spec.out.df$out.type=="recruits" & 
+                     spec.out.df$codNames %in% c("Celtic","W_Scotland","Faroe","GB"),],  aes(x=freq,y=value)) + 
+  geom_line() +
+  facet_grid(kval~codNames) + 
+  ggtitle("recruits: increasing in peak spawning age") +
+  labs(y="spectral density in timeseries of recruits", x="frequency")
+# ---
+ggplot(spec.out.df[spec.out.df$out.type=="eggs" & 
+                     spec.out.df$codNames %in% c("Celtic","W_Scotland","Faroe","GB"),], aes(x=freq,y=value)) +
+  geom_line() +
+  facet_grid(kval~codNames) + 
+  ggtitle("eggs: increasing in peak spawning age") +
+  labs(y="spectral density in timeseries of egg production", x="frequency")
+
+ggplot(spec.out.df[spec.out.df$out.type=="eggs" & spec.out.df$codNames %in% c("NE_Arctic"),], aes(x=freq,y=value)) +
+  geom_line() +
+  facet_grid(kval~codNames) + 
+  ggtitle("eggs: increasing in peak spawning age") +
+  labs(y="spectral density in timeseries of egg production", x="frequency")
+
+
+#pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/spectrum_plots_v1.pdf', width=20, height=7)
+#rp
+#ep
+#dev.off()
+
+```
+
+###6. Calculating the AUC.
+####I calculate AUC for each pop at different k values, but don't plot them yet. I figured I'll tackle this once I'm confident the simulations are working right!
+```{r}
+
+# Eggs
+aucList <- as.list(NA,length=length(codNames))
+for (i in 1:length(codNames)) { #for pop i
+  #subset df to pop i and eggs
+  d <- spec.out.df[spec.out.df$codNames == codNames[i] & spec.out.df$out.type == "eggs",]
+  auc <- rep(NA,length=length(ks)) #store auc for each k value here
+  
+  for (k in 1:length(ks)) { #for k value k
+    #subset d to each k value, * by freq interval ... thank you Lauren!!
+    auc[k] <- sum( d[d$kval == ks[k],]$value * min(d$freq) )} #close k loop
+  
+  #create df: auc, kval, codnames
+  aucdf <- data.frame(cbind(auc,ks,rep(codNames[i],length=length(ks))))
+  names(aucdf) <- c("auc","kval","codNames")
+  aucList[[i]] <- aucdf #store this df in auc list
+}
+auc.df.eggs <- ldply(aucList, data.frame)
+rm(i,k,d,auc,aucdf,aucList)
+
+# Recruits - do same as above, but for recruits
+aucList <- as.list(NA,length=length(codNames))
+for (i in 1:length(codNames)) {
+  d <- spec.out.df[spec.out.df$codNames == codNames[i] & spec.out.df$out.type == "recruits",]
+  auc <- rep(NA,length=length(ks))
+  for (k in 1:length(ks)) {
+    auc[k] <- sum( d[d$kval == ks[k],]$value * min(d$freq) )}
+  
+  aucdf <- data.frame(cbind(auc,ks,rep(codNames[i],length=length(ks))))
+  names(aucdf) <- c("auc","kval","codNames")
+  aucList[[i]] <- aucdf
+}
+auc.df.recruits <- ldply(aucList, data.frame)
+rm(i,k,d,auc,aucdf,aucList)
+
+
+```
+####Somes notes on things that I've checked over the past few weeks based on conversations with Loo and Lauren. I cross-checked lambda1 between the plots I originally made for my AFS presentation (5 panel plots, lambda1 at different k values) with the modified Leslie matricies - they are the same (yay!). As k slope increases to 1, lambda1 also increases to 1.
+
+
+```
