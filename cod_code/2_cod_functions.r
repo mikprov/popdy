@@ -12,7 +12,7 @@ library(faraway)
 #    loop over multiple cod populations
 #
 
-
+tknot = 0
 assemble_Leslie <- function(B0,B1,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
  
   Age=1:maxage

@@ -8,7 +8,7 @@ library(reshape2)
 # ---
 # 1) Define fishing levels 
 # ---
-F.halfmax = seq(0,8,by=0.01)
+F.halfmax = seq(0,100,by=0.01)
 
 # ---
 # 2) read in cod data
@@ -29,15 +29,15 @@ source("C:/Users/provo/Documents/GitHub/popdy/cod_code/2_cod_functions.r")
 # 4) Generate LSB for each pop
 # ---
 tknot = 0 #used in vonB equation 
-k = 1 #this sets no fishing as influenced on Leslie matrix
+#k = 1 #this sets no fishing as influenced on Leslie matrix
 
 
 # loop over pop data in datalist to generate LSB matrices
-LSBlist = as.list(rep(NA,length(datalist))) # store matrix of LSB at age vs F
+LSBlist = as.list(rep(NA,length=length(codNames))) # store matrix of LSB at age vs F
 names(LSBlist) = codNames # assign names to list
 FLEP = matrix(NA,nrow=length(F.halfmax),ncol=length(codNames))
 colnames(FLEP) = codNames
-for (i in 1:length(datalist)) { # step through each pop in datalist
+for (i in 1:length(codNames)) { # step through each pop in datalist
   # load parms for cod pop i
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',names(LSBlist)[i], '.r', sep=''))
   # this should load parms: L_inf, K (vonB), TEMP, maxage
@@ -61,7 +61,8 @@ write.csv(FLEP.F,file='C:/Users/provo/Documents/GitHub/popdy/cod_code/FLEP.F.csv
 # 
 FLEPlong <- melt(FLEP.F,id="F.halfmax")
 pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/F_vs_FLEP.pdf', width=7, height=7)
-ggplot(data=FLEPlong, aes(x=F.halfmax,y=log(value), color=variable, linetype=variable, shape=variable)) + 
+ggplot(data=FLEPlong, aes(x=F.halfmax,y=log(value), 
+                          color=variable, linetype=variable, shape=variable)) + 
   geom_line() +
  # scale_linetype_manual(values=c(rep("solid",8),rep(dashed)))
   theme_classic() +
@@ -128,7 +129,8 @@ target_Fs$diffs_in_F = target_Fs$FLEPlevel-target_Fs$value
 
 
 # for pop i in LSBlist...
-p <- list()
+p <-list()
+
 for (i in 1:length(LSBlist)) {
   f <- target_Fs[target_Fs$variable == names(LSBlist)[i],]
   f$F.halfmax <- paste("F",f$F.halfmax,sep="_") #converting F values to character, makes easier to grab columns later on
@@ -145,10 +147,12 @@ for (i in 1:length(LSBlist)) {
     xlab("age") +
     geom_line() +
     scale_color_brewer(palette = "Reds") +
-    ggtitle(paste(names(LSBlist)[i]))
+    ggtitle(paste(names(LSBlist)[i])) +
+    theme_classic()
 } 
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/egg_production_for_diff_Fs.pdf', width=7, height=15)
-do.call(grid.arrange,c(p,ncol=3))
+
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/egg_production_for_diff_Fs.pdf', width=7, height=10)
+do.call(grid.arrange,c(p,ncol=2))
 dev.off()
 
 

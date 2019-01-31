@@ -1,6 +1,6 @@
 # Calculate Lifetime Egg Production for each population
 # By: Mikaela Provost
-# Last edited: Dec 20, 2018
+# Last edited: Jan 17, 2019
 
 # LEP = sum of l_suba times m_suba (see lecture 11 notes in WFC 122)
 # l_suba is calculated as 1 for age 1, s for age 2, s^2 for age 3, etc
@@ -20,8 +20,9 @@ library(devtools)
 library(broom)
 
 F.halfmax = seq(from=0,to=1.0,by=0.1) #for now, F ranges from 0 to 1
+F.halfmax = 0
 tknot =0 #used in vonB eq. which is in calculate_LSB_at_age_by_F() function
-#ks = c(0.2,0.5,0.8,1) #set k values
+
 
 LSBlist <- as.list(rep(NA,length(codNames))) #LSB at age for pops stored here
 LEP_at_f_levels <- as.list(rep(NA,length(codNames)))
@@ -41,8 +42,17 @@ for (i in 1:length(LSBlist)) { # for each population
   LEP <- colSums(lsb)
   LEP_at_f_levels[[i]] = cbind(F.halfmax,LEP)
   #LSB = wt at age * prop mature at age * survival at age
+  rm(B0,B1,K,L_inf,TEMP)
 }
-rm(i,lsb,TEMP,B0,B1,K,L_inf,LEP)
+rm(i,lsb,LEP)
+
+# plot: Egg production over age when F=0 (save for now)
+par(mfrow=c(4,4))
+for(i in 1:length(LSBlist)){
+  plot(x=seq(from=1,to=length(LSBlist[[i]][,1])), y=LSBlist[[i]][,1],xlab="age", 
+       ylab="egg production", main=codNames[i],type="l")
+}
+par(mfrow=c(1,1))
 
 # Calculate 1/LEP for unfished biomass
 #unfishedLEP <- rep(NA,length=length(codNames))
@@ -51,7 +61,7 @@ rm(i,lsb,TEMP,B0,B1,K,L_inf,LEP)
 #oneoverLEP35 <- rep(NA,length=length(codNames))
 LEPinfo <- matrix(NA,nrow=length(codNames),ncol=4)
 for(i in 1:length(codNames)){
-  p <- as.data.frame(LEP_at_f_levels[[i]])
+  p <- as.data.frame(LEP_at_f_levels[[i]]) #2->i
   LEPinfo[i,1] <- p$LEP[1] #unfished LEP (col1)
   LEPinfo[i,2] <- LEPinfo[i,1]*0.35 #35% of unfished LEP (col2)
   LEPinfo[i,3] <- 1/LEPinfo[i,1] #slope of unfished LEP (col3)
@@ -65,8 +75,11 @@ LEPinfo <- cbind(codNames,LEPinfo)
 # one plot for each pop, plotting both oneoverLEP and oneoverLEP35
 par(mfrow=c(4,4))
 for(i in 1:length(codNames)){
-plot(1, type="n", xlab="", ylab="", xlim=c(0, 10), ylim=c(0, 1),
+plot(1, type="n", xlab="", ylab="", xlim=c(0, 8), ylim=c(0, 8),
      main=LEPinfo$codNames[i]) #empty plot
-abline(a=0,b=LEPinfo$oneoverLEP[i],col="green")
+abline(a=0,b=LEPinfo$oneoverLEP[i],col="blue")
 abline(a=0,b=LEPinfo$oneoverLEP35[i],col="red")
+text(x=c(7,1),y=c(7,7), col=c("blue","red"),
+     label=c(round(LEPinfo$oneoverLEP[i],2),
+             round(LEPinfo$oneoverLEP35[i],2)) )
 }
