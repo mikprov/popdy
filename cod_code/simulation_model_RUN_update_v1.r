@@ -93,7 +93,7 @@ eigenvals2 = rep(NA,length=length(FLEPinfo$Fvalues))
 eigenvals12 = rep(NA,length=length(FLEPinfo$Fvalues))
 
 for (i in 1:length(codNames)){ #for each pop i
-  # load parms for cod pop i: L_inf, K (for vonB), TEMP, maxage,B0,B1 ()
+  # load parms for cod pop i: L_inf, K (for vonB), TEMP, maxage,B0,B1 (matur)
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codNames[i], '.r', sep=''))
   
   for (f in 1:length(FLEP$Fvalues)){ #step through F values 
