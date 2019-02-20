@@ -1,7 +1,7 @@
 ---
 title: "Create Leslie & LSB matrices from cod data"
 author: "Mikaela Provost"
-date: "December 6, 2017"
+date: "Feb 17, 2019"
 output: html_document
 ---
 
@@ -73,9 +73,9 @@ tknot = 0
 F.halfmax = 0 #seq(0,3,by=0.2)
 
 # loop over pop data in datalist to generate LSB matrices
-LSBlist = as.list(rep(NA,length(datalist))) # store matrix of LSB vs F
+LSBlist = as.list(rep(NA,length(codNames))) # store matrix of LSB vs F
 names(LSBlist) = codNames
-ks = c(0,0.2,0.50,8,1) # different k values
+#ks = c(0,0.2,0.50,8,1) # different k values
 
 
 for (i in 1:length(LSBlist)) { # step through each pop in datalist
@@ -83,12 +83,12 @@ for (i in 1:length(LSBlist)) { # step through each pop in datalist
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',names(LSBlist)[i], '.r', sep=''))
   # this should load parms: L_inf, K, TEMP, maxage
   
-  lsb.at.k = matrix(0,nrow=maxage,ncol=length(ks)) #create empty matrix to store LSB at age at k
-  for (u in 1:length(ks)) {
-    lsb.at.k[,u] = calculate_LSB_at_age_by_F(data=datalist[[i]], littlek=ks[u], maxage=maxage,
+  #lsb.at.k = matrix(0,nrow=maxage,ncol=length(ks)) #create empty matrix to store LSB at age at k
+  #for (u in 1:length(ks)) {
+  lsb.at.k = calculate_LSB_at_age_by_F(maxage=maxage,
                                     L_inf=L_inf, K=K, TEMP=TEMP, F.halfmax=F.halfmax,
                                     B0=B0,B1=B1)
-  }
+  #}
   LSBlist[[i]] = lsb.at.k
   
   # export table of lsb at age for different k values (need this to calculate new Leslie matricies)
@@ -96,7 +96,7 @@ for (i in 1:length(LSBlist)) { # step through each pop in datalist
   #            file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/LSBmatrix_maxages/",
    #                      codNames[i],".txt",sep=""))
    write.table(LSBlist[[i]],
-              file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/LSB_k_matrix/",
+              file=paste("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/LSBmatrix_maxages_v1/",
                          codNames[i],".txt",sep=""))
   rm(K,L_inf,maxage,TEMP,B0,B1)
 }

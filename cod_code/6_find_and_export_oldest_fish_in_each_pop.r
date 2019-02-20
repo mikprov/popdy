@@ -33,7 +33,7 @@ max_ages_table$max_ages_occurances <- as.numeric(as.character(max_ages_table$max
 
 # plot abundance at age for every year. 
 # x axis --> age, y --> abundance (CANUM), one line for each year
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/abundnace_at_age.pdf', width=20, height=30)
+#pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/abundnace_at_age.pdf', width=20, height=30)
 p <- list()
 for (i in 1:length(codNames)) {
   pop <- datalist[[12]]
@@ -44,15 +44,15 @@ for (i in 1:length(codNames)) {
   #pop$YEAR <- as.numeric(as.character(pop$YEAR))
   #pop$YEAR <- factor(pop$YEAR)
 
-  p[[1]] <- ggplot(data=pop, aes(x=AGE, y=CANUM, color=YEAR)) + 
+  p[[i]] <- ggplot(data=pop, aes(x=AGE, y=CANUM, color=YEAR)) + 
             geom_line() + 
             theme(legend.position='none') +
             ggtitle(codNames[12]) +
             scale_colour_gradient2()
 }
-do.call(grid.arrange,p)
-rm(p)
-dev.off()
+#do.call(grid.arrange,p)
+rm(p,i)
+#dev.off()
 
 # ===> this wasn't working, so trying bubble plots. 
 # ===> problem: I want no bubble where there is zero abundance at a particular age

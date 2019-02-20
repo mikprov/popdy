@@ -1,0 +1,30 @@
+---
+title: "15_units"
+author: "Mikaela Provost"
+date: "February 18, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Checking Units: LEP
+Lifetime egg production is the sum of: probability of being mature at age * weight at age * survival from age 0 to age a.
+LEP calculations are used to calculate FLEP.
+
+## Checking units: fecundity at age 
+The top row of the Leslie matrix is fecundity at age: probability of being mature at age * weight at age
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

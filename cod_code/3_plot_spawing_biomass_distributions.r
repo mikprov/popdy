@@ -5,8 +5,6 @@ library(ggplot2)
 library(gridExtra)
 # ---
 # Load functions:
-#  extract_first_eigen_value()
-#  extract_second_eigen_value()
 source("C:/Users/provo/Documents/GitHub/popdy/cod_code/2_cod_functions.r")
 
 # ---
@@ -20,62 +18,58 @@ source("C:/Users/provo/Documents/GitHub/popdy/cod_code/6_find_and_export_oldest_
 # this needs to be changed because 2J3KL is an outlier if max age is 
 # left at 20y. The assessment (Brattey et al. 2010, p28) says that most
 # ages are 1-10y, with maximum age reaching 17.
-max_ages_table[max_ages_table$codNames == "2J3KL", ]$max_ages <- 17
+max_ages_table[max_ages_table$codNames == "cod2J3KL", ]$max_ages <- 17
 max_ages_table
 
 # ---
 # Plot spawning biomass distribution -- new way: treat as probability distribution
 # y axis = probability of spawning
 # x axis = age
-Age = 1:30
 cvs = rep(NA,length(codNames)) # empty vector to store cv for populations
 cvs_mode = rep(NA, length(codNames))
 mean_age = rep(NA, length(codNames))
 mode_age = rep(NA, length(codNames))
 sd_age = rep(NA, length(codNames))
 sd_mode = rep(NA, length(codNames))
+F.halfmax = 0
 # note: need to recalculate sd with mode, instead of mean
 
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/SBplot_nofishing_probofspawning_v3_0.0120.pdf', width=7, height=10)
-par(mfrow=c(5,3))
-
+p <- list()
 for (i in 1:length(codNames)) { # step through each cod population
-  datax <- read.table(file = 
-                        paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/k1/'
-                              ,codNames[i], '.txt', sep=''),header=T) # read in Leslie matrix
-  p_spawn = datax[,1] / sum(datax[,1]) # datax[,1] is LSB at age
-                                       # probability of spawning at age = LSB at age/total LSB
-  p_table = data.frame(cbind(Age,p_spawn))
-  keep <- p_table[which(p_table$p_spawn > 0.01),] # remove probabilities less than 0.01
-  #keep <- p_table[which(p_table$Age <= 
-                   #       max_ages_table[max_ages_table$codNames == codNames[i],]$max_ages),
-                  #]  removes ages older than the oldest age found in the population
+ 
+  # this should load parms: L_inf, K, TEMP, maxage
+  source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codNames[i], '.r', sep=''))
+  # calculate LEP at each age
+  lsb.at.k = calculate_LSB_at_age_by_F(maxage=maxage,L_inf=L_inf,K=K,TEMP=TEMP,
+                                       F.halfmax=F.halfmax,B0=B0,B1=B1)
+  Ages = seq(from=1,to=length(lsb.at.k[,1]),by=1)
+  # calculate probability of spawning at age
+  p_spawn = as.data.frame(lsb.at.k[,1] / sum(lsb.at.k[,1])) 
+  colnames(p_spawn) <- "p_spawn"
+  keep= cbind(p_spawn,Ages)
   
-  # using mode
-  #mode_age[i] = which.max(keep$p_spawn) # mode, testing out instead of mean in CV
+  # using mode in sd
   mode_age[i] = keep$Age[which.max(keep$p_spawn)] # what is the age with highest probability?
   sd_mode[i] = sqrt( sum(keep$p_spawn*(keep$Age-mode_age[i])^2) ) # stdev
   cvs_mode[i] = sd_mode[i]/mode_age[i] # coefficient of variation 
   
-  # using mean -- needs fixing if using mean
-  #mean_age[i] = sum(p_spawn * Age) # mean age = sum (probability of spawning at age * age )
-  #sd_age[i] = sqrt( sum( p_spawn*(Age-mean_age[i])^2)) # standard deviation 
-  #cvs[i] = sd_age[i]/mean_age[i] # coefficient of variation 
-  
   # Plot spawning distribution for each population:
-  plot(x=keep$Age, y=keep$p_spawn,type="l",
-       main=codNames[i], ylab="Pr(spawning)",
-       xlab="Age",
-       ylim=c(0,0.3), xlim=c(1,35))
-  abline(v=mode_age[i],col="grey",lty=2)
-  # paste the mean, sd, cv on each population plot
-  #legend("topright",c(paste("mode=",round(x=mode_age[i],digits=2)),
-  #                    paste("sd (mode)=",round(x=sd_mode[i],digits=2)),
-  #                    paste("CV=",round(x=cvs_mode[i],digits=2))))
+  p[[i]] <- ggplot(keep,aes(x=Ages,y=p_spawn)) +
+    geom_line() + theme_classic() + xlab("Age") + 
+    ylab("Pr(spawning)") + ggtitle(paste(codNames[i])) +
+    scale_x_continuous(limits = c(0,25)) +
+    scale_y_continuous(limits = c(0,0.35)) +
+    geom_vline(xintercept=mode_age[i],linetype="dotted")
+    
 }
-
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/SBplot_nofishing_probofspawning_v4.pdf', width=7, height=10)
+do.call(grid.arrange,c(p,ncol=3))
 dev.off()
-par(mfrow=c(1,1))
+
+
+# ****************************************
+# code below: produced older plots, likely needs updating
+# ****************************************
 
 
 # ---

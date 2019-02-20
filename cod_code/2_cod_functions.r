@@ -29,12 +29,18 @@ assemble_Leslie <- function(B0,B1,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
   #mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age) # proportion mature at age
   
   growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3 # weight at age, uses vonB
+  # NOTE: allometric length-wt scale is 0.00001 b/c Wang used it.
+  # looked up on Fishbase, cod stocks range 0.005-0.0117 (cm-grams), geometric average=0.0071
+  # units: 'growth' at age is weight at age in kilograms
   mat1 = ilogit(B0 + B1*Age) #B0 and B1 are published in Wang et al
   
   # -- assemble NEAR df: use NEAR to calculate Leslie matrix
   NEAR = data.frame(cbind(Age,mat1,growth))  #life table: maturity & size at age
   NEAR$Vul1 = mat1 #insert selectivity at age, use maturity ogive for selectivity
-  NEAR$M_G= 0.19+0.058*TEMP #insert mortality at age, from regression fit of Fig. 5c, loaded in parms set
+  NEAR$M_G= 0.19+0.058*TEMP #insert mortality at age, from regression fit of Fig. 5c, 
+  # loaded in parms set. Predicted natural mortality rates from the regression of 
+  # temperature effect on M_G. 
+  
   
   A = matrix(0,length(Age),length(Age)) #empty Leslie matrix
   
@@ -48,13 +54,11 @@ assemble_Leslie <- function(B0,B1,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
     
     #for(k in 1:(nrow(NEAR)-1)){ # step through ages to calc survivorship
     #  NEAR$Survship[k+1] = NEAR$Survship[k]*NEAR$SURV[k] #amount present at age
-    #}
+   # }
   }
   
   
-  # --- if I want to multiply fecundities by some k term, use this line --- #
-  #A[1,] = NEAR[,2]*NEAR[,3] # insert fecundity (maturity * weight) in top row
-  A[1,] = NEAR$mat1*NEAR$growth # insert fecundity (maturity * weight) in top row
+  A[1,] = NEAR$mat1*NEAR$growth# insert fecundity (maturity * weight) in top row
   # ----------------------------------------------------------------------- #
   
   for(u in 2:length(Age)-1){ # insert survival into A on subdiagonal
@@ -110,7 +114,7 @@ extract_second_eigen_value <- function(Lesliematrix){
 # littlek = the value multiplied across the top row of the Leslie matrix, 
 #   is a measure of fishing pressure (Lauren's analysis)
 
-calculate_LSB_at_age_by_F <- function(data,B0,B1,maxage,L_inf,K,TEMP,F.halfmax){
+calculate_LSB_at_age_by_F <- function(B0,B1,maxage,L_inf,K,TEMP,F.halfmax){
   
   Age = 1:maxage
   
@@ -128,7 +132,7 @@ calculate_LSB_at_age_by_F <- function(data,B0,B1,maxage,L_inf,K,TEMP,F.halfmax){
   #mat1 = ilogit(mod.mat$coef[1]+mod.mat$coef[2]*Age) 
     #above, I was using coefficients I calculated, but Wang et al.
     #published them, so just using those (B0 and B1, below)
-  growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3 #weight at age
+  growth = 0.00001*(L_inf*(1-exp(-K*(Age-tknot))))^3 #weight at age (kilograms)
   mat1 = ilogit(B0 + B1*Age) #B0 and B1 are published in Wang et al
   
   # -- assemble NEAR df: use NEAR to calculate LSB

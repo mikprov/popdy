@@ -324,6 +324,7 @@ nsize.ts <- do.call(rbind,df.list)
 rm(df.list) #clean up
 
 ts.data <- rbind(eggs.ts,recruits.ts,nsize.ts) #combine data
+rownames(ts.data) <- NULL
 # ready for plotting!
 
 
@@ -332,8 +333,9 @@ ts.data <- rbind(eggs.ts,recruits.ts,nsize.ts) #combine data
 # ------------------------------------------------------------------------- #
 head(ts.data)
 
-p <- list()
+
 # plot eggs - one plot per pop, on each plot 5 lines for different F levels
+p <- list()
 for (i in 1:length(codNames)){
 
   p[[i]] <- ggplot(ts.data[ts.data$variable == "eggs" & ts.data$codNames == codNames[i],], 
@@ -344,23 +346,42 @@ for (i in 1:length(codNames)){
     ggtitle(paste(codNames[i])) +
     theme_classic()
 }
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/egg_production_for_diff_FLEPs_alpha50.pdf', width=7, height=10)
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/egg_production_for_diff_FLEPs_alpha50.pdf', width=7, height=10) #note: file name specifies the alpha used in simluation model
 do.call(grid.arrange,c(p,ncol=2))
 dev.off()
 rm(p,i)
 
-#plot recruitment
+#plot recruitment - one plot per pop, similar to egg plots
 p <- list()
 for (i in 1:length(codNames)){
-  p[[i]] <- ggplot(ts.data[ts.data$variable == "recruits" & ts.data$codNames == codNames[i],],
-                   aes(x=year,y=value,color=FLEP)) +
+  p[[i]] <- ggplot(ts.data[ts.data$variable == "recruits" & 
+                             ts.data$codNames == codNames[i],],
+                   aes(x=year,y=value,color=FLEP)) + 
     xlab("year") + ylab("recruits") +
     geom_line() + scale_color_brewer(palette = "Reds") +
     ggtitle(paste(codNames[i])) +
     theme_classic()
 }
-do.call(grid.arrange,c(p,ncol=3))
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/recruitment_beforenoise_for_diff_FLEPs_alpha50.pdf', width=7, height=10) #note: file name specifies the alpha used in simluation model
+do.call(grid.arrange,c(p,ncol=2))
+dev.off()
+rm(p,i)
 
+#plot pop size - one plot per pop, similar to egg & recruitment plots
+p <- list()
+for (i in 1:length(codNames)){
+  p[[i]] <- ggplot(ts.data[ts.data$variable == "Nsize" & 
+                             ts.data$codNames == codNames[i],],
+                   aes(x=year,y=value,color=FLEP)) + 
+    xlab("year") + ylab("Nsize") +
+    geom_line() + scale_color_brewer(palette = "Reds") +
+    ggtitle(paste(codNames[i])) +
+    theme_classic()
+}
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/Nsize_for_diff_FLEPs_alpha50.pdf', width=7, height=10) #note: file name specifies the alpha used in simluation model
+do.call(grid.arrange,c(p,ncol=2))
+dev.off()
+rm(p,i)
 
 
 # ------------------------------------------------------------------------- #
@@ -421,7 +442,7 @@ rm(i,f,sp,e,r,n,tmp,m) #clean up
 
 # Plan
 # 1. re-arrange 3d dataframes for plotting (sp.eggs, sp.recruit, sp.nsize)
-# 2. combine all 3 variable data frames to make one df 
+# 2. combine all 3 variable type data frames to make one df 
 # 3. plot
 
 # 1. re-arrange egg dataframe
@@ -475,128 +496,27 @@ specdatalong <- specdata %>% gather(FLEP,value,1:5) #ready for ggplot
 
 # 3. plot
 
+# 
+ggplot(data=specdatalong[specdatalong$variable.type == "eggs" & specdatalong$codNames=="GM",],
+       aes(x=freq,y=value,color=FLEP)) + geom_line() + 
+       scale_color_brewer(palette = "Reds") + theme_classic()
 
 
 
-#plot(x=sp$freq,y=spall[,i],type="l",main=eigentable$codNames[i])
-#legend("topright",c(paste("mode=",eigentable$mode[i]),
-#                    paste("sd (mode)=",round(x=eigentable$sd_mode[i],digits=2)),
-#                    paste("CV=",round(x=eigentable$cvs_mode[i],digits=2))))
-
-
-
-sp_egg = cbind(seq(from=0.001111111, to=0.5, by=0.001111111),spall) #save freq with spec
-colnames(sp_egg) = c("freq",eigentable$codNames)
-sp_egg = as.data.frame(sp_egg)
-plot(output$eggs)
-
-
-
-
-
-# ---
-# run simulation - RECRUITS (before noise) --> that means output[[3]]
-# create empty objects for simulation
-freq = seq(from=0.001111111, to=0.5, by=0.001111111) #all frequencies, for plotting later
-spall = matrix(NA, length(freq),length(eigentable$codNames)) #set up empty matrix, spec for all plots
-outputL = vector("list", length(eigentable$codNames)) #create empty list to store sim output
-names(outputL) = eigentable$codNames
-
-for (i in 1:length(eigentable$codNames)) { # step through each cod population
-  #A = read.table(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLeslie/matrix_maxages/'
-  #                            ,eigentable$codNames[i], '.txt', sep=''))
-  
-  # --- #
-  # run this section if 'base' Leslie matricies need to be generated
-  # load parms for cod pop i
-  source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',eigentable$codNames[i], '.r', sep=''))
-  # this should load parms: L_inf, K, TEMP, maxage
-  out=assemble_Leslie(data=datalist[[i]], maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
-                        F.halfmax=0,tknot=0)
-  Alist[[i]]=out$A #store Leslie in a list just in case I need it later
-  A = out$A #store Leslie as A for later use
-  #Alist[[i]][1,] <- Alist[[i]][1,]*k[j] #this line multiplies fecundities by k
-  eigenvals1[i] <- extract_first_eigen_value(Alist[[i]]) #calc first eigenvalue
-  eigenvals2[i] <- extract_second_eigen_value(Alist[[i]]) #calc second eigenvalue
-  eigenvals1.2[i] <- eigenvals2[i] / eigenvals1[i] #calc damp ratio
-  # remove pop parms for next loop 
-  rm(K,L_inf,maxage)
-  # --- #
-  
-  A = as.matrix(A)
-  output = sim_model(A=A, timesteps=timesteps, 
-                     alpha=1, beta=beta, #change alpha to alpha not 1
-                     sig_r=sig_r, initial_eggs=initial_eggs)  
-  outputL[[i]] = output #save sim output for each pop 
-  # setting 'span' - a vector of odd integers to specify the smoothers
-  tmp <- ceiling(sqrt(length(1:(timesteps-rm_first_timesteps-1)))) #square root of timeseries length, rounded
-  if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp} #make it odd, if the square root is even
-  m = m * span.multiplier
-  # plot frequency content
-  sp = spec.pgram(x=output[[3]][rm_first_timesteps:(timesteps-2)], 
-                  spans=c(m,m),plot = FALSE)
-  spall[,i] = 2*sp$spec #save spec output for plotting pops together, Helen Wearing says to multiply by 2
-  #plot(x=sp$freq,y=spall[,i],type="l",main=eigentable$codNames[i])
-  #legend("topright",c(paste("mode=",eigentable$mode[i]),
-  #                    paste("sd (mode)=",round(x=eigentable$sd_mode[i],digits=2)),
-  #                    paste("CV=",round(x=eigentable$cvs_mode[i],digits=2))))
-}
-rm(sp,tmp,A,output,i) #clean up
-sp_rec = cbind(seq(from=0.001111111, to=0.5, by=0.001111111),spall) #save freq with spec
-colnames(sp_rec) = c("freq",eigentable$codNames)
-sp_rec = as.data.frame(sp_rec)
-
-# ===========================================================
-# Let's look at some of the output before doing more analysis
-# ---
-# total population size over time
-n_size <- lapply(outputL, function(x) x['Nsize'])
-n_sizedf <- do.call(cbind.data.frame, n_size)
-colnames(n_sizedf) <- eigentable$codNames
-n_sizedf$time <- seq(1:length(n_sizedf$Northsea))
-n_sizedf <- subset(n_sizedf, time > 500)
-n_size_long <- melt(n_sizedf, id = "time")
-n_size_long$variable <- factor(n_size_long$variable)
-
-ggplot(n_size_long, aes(x=time, y=value, group=variable, color=variable, shape=variable)) +
-  scale_shape_manual(values=1:nlevels(n_size_long$variable)) +
-  geom_point() +
+ggplot(forplot,aes(x=age,y=value,color=variable)) +
+  ylab("egg production") +
+  xlab("age") +
   geom_line() +
-  labs(y="N",x="time")
-rm(n_size, n_sizedf, n_size_long) # clean up
-# ---
-# egg production over time (this should be the same as total population size, 
-# but one time step off)
-eg <- lapply(outputL, function(x) x['eggs'])
-egdf <- do.call(cbind.data.frame, eg)
-colnames(egdf) <- eigentable$codNames
-egdf$time <- seq(1:length(egdf$Northsea))
-egdf <- subset(egdf, time > 500)
-eg_long <- melt(egdf, id = "time")
-eg_long$variable <- factor(eg_long$variable)
+  scale_color_brewer(palette = "Reds") +
+  ggtitle(paste(names(LSBlist)[i])) +
+  theme_classic()
 
-ggplot(eg_long, aes(x=time, y=value, group=variable, color=variable, shape=variable)) +
-  scale_shape_manual(values=1:nlevels(eg_long$variable)) +
-  geom_point() +
-  geom_line() +
-  labs(y="eggs",x="time")
-rm(eg, egdf, eg_long) # clean up
-# ---
-# recruitment (before noise) over time
-rec <- lapply(outputL, function(x) x['recruits'])
-recdf <- do.call(cbind.data.frame, rec)
-colnames(recdf) <- eigentable$codNames
-recdf$time <- seq(1:length(recdf$Northsea))
-recdf <- subset(recdf, time > 500)
-rec_long <- melt(recdf, id = "time")
-rec_long$variable <- factor(rec_long$variable)
 
-ggplot(rec_long, aes(x=time, y=value, group=variable, color=variable, shape=variable)) +
-  scale_shape_manual(values=1:nlevels(rec_long$variable)) +
-  geom_point() +
-  geom_line() +
-  labs(y="recruits (before noise)",x="time")
-rm(rec, recdf, rec_long) # clean up
+
+
+
+
+
 
 
 
