@@ -114,8 +114,8 @@ rm(e1,e2,e12,i,f,Leslieout,Lesliearray) #clean up
 # (4) Simulate pops. Loop over Aarray list to simulate using different Leslie matrices 
 # *************************************** #
 # set params for simulation:
-timesteps = 1000 #need this now to create
-rm_first_timesteps = 100
+timesteps = 200 #need this now to create
+rm_first_timesteps = 50
 beta = 100 
 initial_eggs = 100
 sig_r = 0.7
@@ -224,22 +224,9 @@ rm(i,sub,sub2,merged)
 head(final)
 
 # *************************************** #
-# (6) Find F values associated with FLEP levels of interest
+# (6) Subset final to have F values associated with tarvel FLEP levels 
 # *************************************** #
 # find the nearest F values that correspond to the desired FLEP value
-target_FLEP = c(1,0.8,0.5,0.35,0.2)
-
-ttt <- final %>% group_by(codNames) %>% 
-  arrange(abs(FLEP-1)) %>%
-  slice(1) %>%
-  mutate(FLEPtarget=rep(1))
-rm(ttt)
-# USE THIS LINE IN FOR LOOP
-ttt <- final[final$Fval==3 & final$codNames == "Northsea",]
-subset final to one popualtion
-subset target_Fs[onelevel] to 
-
-
 target_Fs <- rbind(
   
   as.data.frame(melt(FLEP,id="Fvalues") %>% 
@@ -278,23 +265,31 @@ target_Fs <- rbind(
                   mutate(FLEPlevel=rep(0.2))) 
   
 )
-target_Fs
+#target_FLEP = c(1,0.8,0.5,0.35,0.2)
+
+sublist = as.list(NA, rep(length(codNames)))
+for (i in 1:length(codNames)){
+  sub <- final[final$codNames == codNames[i],]
+  sub2 <- target_Fs[target_Fs$variable == codNames[i],]
+  sub3 <- sub[sub$Fval %in% sub2$Fvalues,]
+  sublist[[i]] <- sub3
+}
+finaltargets <- do.call(rbind,sublist)
+rm(i,sub,sub2,sub3,sublist) #clean up
+
 
 
 # *************************************** #
 # (7) Now that timeseries data is formated, let's plot!
 # *************************************** #
 
-tt <- final[final$FLEP %in% target_FLEP,]
-
 # plot eggs - one plot per pop, on each plot 5 lines for different F levels
 p <- list()
 for (i in 1:length(codNames)){
   
-  p[[i]] <- ggplot(final[final$variable == "eggs" & 
-                           final$codNames == codNames[i] &
-                           final$FLEP %in% target_FLEP,], 
-                   aes(x=year,y=value,color=FLEP)) +
+  p[[i]] <- ggplot(finaltargets[finaltargets$variable == "eggs" & 
+                                  finaltargets$codNames == codNames[i],], 
+                   aes(x=year,y=value,color=Fval)) +
     xlab("year") + ylab("egg production") +
     geom_line() +
     scale_color_brewer(palette = "Reds") +
@@ -306,12 +301,14 @@ do.call(grid.arrange,c(p,ncol=2))
 dev.off()
 rm(p,i)
 
+
+
 #plot recruitment - one plot per pop, similar to egg plots
 p <- list()
 for (i in 1:length(codNames)){
-  p[[i]] <- ggplot(ts.data[ts.data$variable == "recruits" & 
-                             ts.data$codNames == codNames[i],],
-                   aes(x=year,y=value,color=FLEP)) + 
+  p[[i]] <- ggplot(finaltargets[finaltargets$variable == "recruits" & 
+                                  finaltargets$codNames == codNames[i],], 
+                   aes(x=year,y=value,color=Fval)) + 
     xlab("year") + ylab("recruits") +
     geom_line() + scale_color_brewer(palette = "Reds") +
     ggtitle(paste(codNames[i])) +
@@ -325,9 +322,9 @@ rm(p,i)
 #plot pop size - one plot per pop, similar to egg & recruitment plots
 p <- list()
 for (i in 1:length(codNames)){
-  p[[i]] <- ggplot(ts.data[ts.data$variable == "Nsize" & 
-                             ts.data$codNames == codNames[i],],
-                   aes(x=year,y=value,color=FLEP)) + 
+  p[[i]] <- ggplot(finaltargets[finaltargets$variable == "Nsize" & 
+                                  finaltargets$codNames == codNames[i],], 
+                   aes(x=year,y=value,color=Fval)) + 
     xlab("year") + ylab("Nsize") +
     geom_line() + scale_color_brewer(palette = "Reds") +
     ggtitle(paste(codNames[i])) +
@@ -338,8 +335,12 @@ do.call(grid.arrange,c(p,ncol=2))
 dev.off()
 rm(p,i)
 
+
+
+
+
 # ------------------------------------------------------------------------- #
-#  
+#  Extra code below
 # ------------------------------------------------------------------------- #
 
     
