@@ -144,13 +144,19 @@ calculate_LSB_at_age_by_F <- function(B0,B1,maxage,L_inf,K,TEMP,F.halfmax){
   LEPdf = matrix(0,nrow=length(Age),ncol=length(F.halfmax))
   for(g in 1:length(F.halfmax)){ # step through each fishing level, for the first column in LEPdf
    fishing_at_age = NEAR$Vul1*F.halfmax[g]	# Vul1 should be selectivity, but it's mat. F=selectivity*F rate
-   surv_at_age = exp(-(fishing_at_age+NEAR$M_G)) #SURV is the fraction surviving at each age
-   l_suba <- rep(NA,length=length(Age)) #create empty vector to store l_suba
+   NEAR$SURV_at_age = exp(-(fishing_at_age+NEAR$M_G)) #SURV is the fraction surviving at each age
+   #l_suba <- rep(NA,length=length(Age)) #create empty vector to store l_suba
    
-   for(j in 1:length(Age)){ #for each age
-      l_suba[j] = surv_at_age[1]^(j-1) } #l_suba = survival^a starting at 0
+   #for(j in 1:length(Age)){ #for each age
+   #    l_suba[j] = surv_at_age[j]^(j-1) } #l_suba = survival^a starting at 0
+   NEAR$Survship = 0 # set up column for survivorship (amount or fraction present at age)
+   NEAR$Survship[1] = 1
+   
+   for(k in 1:(nrow(NEAR)-1)){ # step through ages to calc survivorship
+     NEAR$Survship[k+1] = NEAR$Survship[k]*NEAR$SURV_at_age[k] #amount present at age
+   }
       
-   LEPdf[,g] = NEAR$mat1*NEAR$growth*l_suba #prop mat at age * wt at age * survival from age 0 to age a
+   LEPdf[,g] = NEAR$mat1*NEAR$growth*NEAR$Survship #prop mat at age * wt at age * survival from age 0 to age a
     
   } # closes fishing level loop
   

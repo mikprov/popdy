@@ -3,6 +3,8 @@
 # last edited: Feb 19, 2019
 # ===================================================================
 
+library(tidyr)
+library(dplyr)
 # ---
 # load the simulation model
 source("C:/Users/provo/Documents/GitHub/popdy/cod_code/simulation_model_cod_v3.r")
@@ -27,36 +29,19 @@ freq = seq(from=0.001111111, to=0.5, by=0.001111111) #all frequencies, for plott
 spall = matrix(NA, length(freq),length(eigentable$codNames)) #set up empty matrix, spec for all plots
 outputL = vector("list", length(eigentable$codNames)) #create empty list to store sim output
 names(outputL) = eigentable$codNames
-
 # ---
-# set params for simulation:
-timesteps = 1000
-rm_first_timesteps = 100
-beta = 9 #note: alpha is different for each pop
-initial_eggs = 5
-sig_r = 0.7
-span.multiplier = 1 # what is this again?
 
-# ---
-# store 3d arrays of Leslie matricies for each Fvalues for each pop
-Aarray <- as.list(rep(NA,length=length(codNames)))
-names(Aarray) <- codNames
-# store FLEP and LEP information
-FLEPinfolist <- as.list(rep(NA,length=length(codNames)))
-# store alpha values at 1/(LEP*.35) for each pop i
-alphas <- rep(NA, length=length(codNames))
 
-# --- #
-# choose the F values associated with FLEP values
-Fvalues = seq(0,200,by=0.01) #I may need to change the max F value (some pops can withstand high F)
-FLEP = matrix(NA,nrow=length(Fvalues),ncol=length(codNames)) #store FLEP values here
-colnames(FLEP) = codNames
+
 
 # *************************************** #
 # (1) calc LEP from range of F values (create LEP matrix)
 # *************************************** #
+Fvalues = seq(0,3,by=0.01) #Check max F value (some pops can withstand high F)
+FLEP = matrix(NA,nrow=length(Fvalues),ncol=length(codNames)) #store FLEP values here
+colnames(FLEP) = codNames
 LEPmatrix = matrix(NA,nrow=length(Fvalues),ncol=length(codNames))
-for (i in 1:length(eigentable$codNames)) { #step through each cod population
+for (i in 1:length(codNames)) { #step through each cod population
   
   # load parms for cod pop i: L_inf, K (for vonB), TEMP, maxage
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codNames[i], '.r', sep=''))
@@ -71,7 +56,6 @@ for (i in 1:length(eigentable$codNames)) { #step through each cod population
                                              B0=B0,B1=B1)
   LEPmatrix[,i] <- colSums(LSB_at_age) #store LEP at different F values for pop i
 }
-# [make plot: F vs FLEP]
 
 
 # *************************************** #
@@ -80,107 +64,78 @@ for (i in 1:length(eigentable$codNames)) { #step through each cod population
 # here I calculate FLEP: LSB at all F levels / LSB at F=0
 FLEP = t(t(LEPmatrix)/LEPmatrix[1,])
 colnames(FLEP) <- codNames #assign pop names
+#FLEP <- round(FLEP, digits=2)
 FLEP <- as.data.frame(cbind(Fvalues,FLEP)) #first col=F values, rest are FLEP vals for pops
+
 # [make plot: F vs FLEP]
+FLEPplot <- FLEP %>% gather(pop,value,2:17)
+FLEPvsF <- ggplot(FLEPplot,aes(x=Fvalues,y=log(value),color=pop)) +
+  geom_line() + theme_classic() +
+  xlab("F") + ylab("ln(FLEP)")
 
 
 # *************************************** #
 # (3) Generate Leslie matricies for diff F values (create Leslie arrays)
 # *************************************** #
-Alist = as.list(rep(NA,length(FLEPinfo$Fvalues))) #Leslie matrix storage for each F value for pop i
-eigenvals1 = rep(NA,length=length(FLEPinfo$Fvalues))
-eigenvals2 = rep(NA,length=length(FLEPinfo$Fvalues))
-eigenvals12 = rep(NA,length=length(FLEPinfo$Fvalues))
+Aarray = as.list(rep(NA,length(codNames))) #Leslie matrix storage for each F value for pop i
+eigenvals1 = matrix(NA,nrow=length(FLEP$Fvalues),ncol=length(codNames)) 
+eigenvals2 = matrix(NA,nrow=length(FLEP$Fvalues),ncol=length(codNames))
+eigenvals12 = matrix(NA,nrow=length(FLEP$Fvalues),ncol=length(codNames))
+
 
 for (i in 1:length(codNames)){ #for each pop i
   # load parms for cod pop i: L_inf, K (for vonB), TEMP, maxage,B0,B1 (matur)
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codNames[i], '.r', sep=''))
   
+  Lesliearray <- array(NA,c(maxage,maxage,length(Fvalues))) #store Leslie matricies
+  e1 = rep(NA,length=length(Fvalues)) #store lambda1
+  e2 = rep(NA,length=length(Fvalues)) #store lambda2
+  e12 = rep(NA,length=length(Fvalues)) #store inverse damping ratio
+  
   for (f in 1:length(FLEP$Fvalues)){ #step through F values 
     # create Leslie matrix:
     Leslieout = assemble_Leslie(maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
                                 F.halfmax=FLEP$Fvalues[f], tknot=0, B0=B0, B1=B1)
-    Larray[,,f] = Leslieout$A #3D array of Leslie matricies
-    e1[f] = extract_first_eigenvalue(Leslieout$A)
+    Lesliearray[,,f] = Leslieout$A #3D array of Leslie matricies
+    e1[f] = extract_first_eigen_value(Leslieout$A)
     e2[f] = extract_second_eigen_value(Leslieout$A)
     e12[f] = eigenvals2[f] / eigenvals1[f]
     }
     
-  Alist[[i]]= Larray #store Leslie 3D array in list of all pops
+  Aarray[[i]]= Lesliearray #store Leslie 3D array in list of all pops
   eigenvals1[,i] = e1 #store lambda1 
   eigenvals2[,i] = e2 #store lambda2
   eigenvals12[,i] = e12 #store inverse of damping ratio
 }
-
-# *****
-    
-    # using the Leslie, calculate first and second eigenvalues
-    eigenvals1[f] <- extract_first_eigen_value(A) #calc first eigenvalue
-    eigenvals2[f] <- extract_second_eigen_value(A) #calc second eigenvalue
-    eigenvals12[f] <- eigenvals2[f] / eigenvals1[f] #calc damp ratio
-  
-  }
-  # collapse list of Leslie matricies into 3d array for pop i
-  Aarray[[i]] <- array(unlist(Alist),dim=c(length(A[,1]),length(A[1,]),length(FLEPinfo$Fvalues)))
-  FLEPinfo$lambda1 <- eigenvals1
-  FLEPinfo$lambda2 <- eigenvals2
-  FLEPinfo$lambda12 <- eigenvals12
-  
-  FLEPinfolist[[i]] <- FLEPinfo
-  # ---
-  # Define alpha for pop i -- this is a big deal!
-  alpha <- 1/FLEPinfo[FLEPinfo$FLEPlevel == 0.35,]$LEP
-  alphas[i] <- alpha #save alphas for popultions. 
-  # --- #
-  # make sure enough of a fishing range to get pops down to 0.2 FLEP. Look at: 
-#FLEPinfoDF <- do.call("rbind",FLEPinfolist)
-#alphatable <- cbind(codNames,as.data.frame(alphas))
-
-# CHECK THIS: is alpha related to high fishing at FLEP=0.2?
-#plot(x = FLEPinfoDF[FLEPinfoDF$FLEPlevel == 0.35,]$Fvalues,
-#     y = alphas, ylab="alpha = 1/(LEP*0.35)", xlab="F at FLEP=0.2")
-#text(alphas~FLEPinfoDF[FLEPinfoDF$FLEPlevel == 0.35,]$Fvalues, 
-#     labels=codNames,cex=0.9, font=2, pos=3)
-  rm(L_inf,K,TEMP,B0,B1) #rm these variables after each loop, seems safer
-} 
-rm(i,eigenvals1,eigenvals2,eigenvals12,Leslieout,A,FLEPinfo,
-   target_Fs,target_LEPs,Alist,LEP,FLEP,FLEP.F,FLEP.LEP,
-   MG,Mp,name,rm_first_timesteps,S50,f) #clean up
-
-# At this point I have some important objects:
-# 1. [alphas] a vector of alpha values (defined as 1/(LEP*0.35)) for each pop
-# 2. [Aarray] a list of arrays: each element in list is a stack of Leslie matrcies at each F
-# 3. [FLEPinfolist] a list of dataframes with FLEP info: F values, lambda 1 and 2, LEP
+rm(e1,e2,e12,i,f,Leslieout,Lesliearray) #clean up
 
 
-# ------------------------------------------------------------------------- #
-# --- Loop over Aarray list to simulate using different Leslie matrices 
-# ------------------------------------------------------------------------- #
-
-# There are different ways to run the simulation:
-# 1. Use different alpha values for each pop (alpha = 1/(35%LEP)) --> alphas
-# 2. Use all the same alpha values for each pop (alpha = pick a value) --> constant alpha
-alphas
-test <- as.data.frame(cbind(codNames, alphas))
-constant_alpha0.5 <- rep(0.5,length=length(alphas))
-constant_alpha1 <- rep(1, length=length(alphas))
-constant_alpha2 <- rep(2, length=length(alphas))
-constant_alpha50 <- rep(50, length=length(alphas))
-# change to one of these in the sim_model() right below
+# *************************************** #
+# (4) Simulate pops. Loop over Aarray list to simulate using different Leslie matrices 
+# *************************************** #
+# set params for simulation:
+timesteps = 1000 #need this now to create
+rm_first_timesteps = 100
+beta = 100 
+initial_eggs = 100
+sig_r = 0.7
+span.multiplier = 1 # what is this again?
+alphas <- rep(50, length=length(codNames)) #alpha could be diff for pops
 
 output.3d.list <- as.list(rep(NA,length=length(codNames))) #store timeseries here
 names(output.3d.list) <- codNames
 
 for (i in 1:length(Aarray)) { #step through each pop
   Leslie3d = Aarray[[i]] #select the 3d array of Leslie matricies
-  # array dims: 5 is number of F values, 4 is number of ts, 998 is length of ts
-  output.matrix <- array(NA,c(timesteps-2,4,5)) 
+  # array dims: row=ts length, col=4 is number of ts (eggs,recruits,Nt,Nsize), depth=F vals
+  output.matrix <- array(NA,c(timesteps-2,4,length(Fvalues))) 
   
-  for (f in 1:5) { #step through each Leslie matrix (for pop i)
+  for (f in 1:length(Fvalues)) { #step through each Leslie matrix (for each F value)
     output = sim_model(A=Leslie3d[,,f], timesteps=timesteps, 
-                       alpha=constant_alpha50[i], beta=1000, 
+                       alpha=alphas[i], beta=beta, 
                        sig_r=sig_r, initial_eggs=initial_eggs)
-    length(output$Nsize) <- length(output$N_t) #trim ts vector, -2 elements
+    
+    length(output$Nsize) <- length(output$N_t) #trim Nsize ts vector, -2 elements
     output.matrix[,,f] <- do.call(cbind,output) #fill in array for pop i
     #colnames(output.matrix) <- names(output)
   }
@@ -193,9 +148,9 @@ rm(i,f,Leslie3d,output.matrix,output) #clean up
 #    from simulations at different F levels. 
 
 
-# ------------------------------------------------------------------------- #
-# --- Format output ts for plotting simulations using output.3d.list
-# ------------------------------------------------------------------------- #
+# *************************************** #
+# (5) Format output ts for plotting simulations using output.3d.list
+# *************************************** #
 variable_type <- c("Nt","eggs","recruits","Nsize")
 
 # --- reorganize egg timeseries data --- #
@@ -206,14 +161,14 @@ for (i in 1:length(output.3d.list)) {
   # first, reformat data to work with ggplot
   aa <- as.data.frame(output.3d.list[[i]][,var.number,])
   aa$year <- seq(from=1, to=length(aa[,1]))
-  colnames(aa) <- c("1","0.8","0.5","0.35","0.2","year")
-  aa1 <- aa %>% gather(FLEP,value,1:5)
+  colnames(aa) <- c(Fvalues,"year")
+  aa1 <- aa %>% gather(Fval,value,1:length(Fvalues))
   aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
   aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
   df.list[[i]] <- aa1
   rm(aa1,aa)}
 eggs.ts <- do.call(rbind,df.list)
-rm(df.list) #clean up
+rm(df.list,i) #clean up
 
 # --- reorganize recruit timeseries data --- #
 var.number <- 3 # recruits
@@ -223,8 +178,8 @@ for (i in 1:length(output.3d.list)) {
   # first, reformat data to work with ggplot
   aa <- as.data.frame(output.3d.list[[i]][,var.number,])
   aa$year <- seq(from=1, to=length(aa[,1]))
-  colnames(aa) <- c("1","0.8","0.5","0.35","0.2","year")
-  aa1 <- aa %>% gather(FLEP,value,1:5)
+  colnames(aa) <- c(Fvalues,"year")
+  aa1 <- aa %>% gather(Fval,value,1:length(Fvalues))
   aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
   aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
   df.list[[i]] <- aa1
@@ -240,8 +195,8 @@ for (i in 1:length(output.3d.list)) {
   # first, reformat data to work with ggplot
   aa <- as.data.frame(output.3d.list[[i]][,var.number,])
   aa$year <- seq(from=1, to=length(aa[,1]))
-  colnames(aa) <- c("1","0.8","0.5","0.35","0.2","year")
-  aa1 <- aa %>% gather(FLEP,value,1:5)
+  colnames(aa) <- c(Fvalues,"year")
+  aa1 <- aa %>% gather(Fval,value,1:length(Fvalues))
   aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
   aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
   df.list[[i]] <- aa1
@@ -251,20 +206,94 @@ rm(df.list) #clean up
 
 ts.data <- rbind(eggs.ts,recruits.ts,nsize.ts) #combine data
 rownames(ts.data) <- NULL
-# ready for plotting!
+
+# add FLEP levels from FLEP df to ts.data (matching on Fvalues)
+final <- matrix(NA,nrow = 0, ncol = (ncol(ts.data) + 1))
+final <- as.data.frame(final)
+names(final) <- c(names(ts.data),'FLEP')
+
+for (i in 1:length(codNames)){ 
+  print(i)
+  sub <- ts.data[ts.data$codNames == codNames[i],]
+  sub2 <- FLEP[,c('Fvalues', codNames[i])]
+  merged <- merge(x = sub, y = sub2, by.x = 'Fval', by.y = 'Fvalues', sort = F)
+  names(merged)[ncol(merged)] <- 'FLEP'
+  final <- rbind(final, merged)
+}
+rm(i,sub,sub2,merged)
+head(final)
+
+# *************************************** #
+# (6) Find F values associated with FLEP levels of interest
+# *************************************** #
+# find the nearest F values that correspond to the desired FLEP value
+target_FLEP = c(1,0.8,0.5,0.35,0.2)
+
+ttt <- final %>% group_by(codNames) %>% 
+  arrange(abs(FLEP-1)) %>%
+  slice(1) %>%
+  mutate(FLEPtarget=rep(1))
+rm(ttt)
+# USE THIS LINE IN FOR LOOP
+ttt <- final[final$Fval==3 & final$codNames == "Northsea",]
+subset final to one popualtion
+subset target_Fs[onelevel] to 
 
 
-# ------------------------------------------------------------------------- #
-# --- Now that timeseries data is formated, let's plot!
-# ------------------------------------------------------------------------- #
-head(ts.data)
+target_Fs <- rbind(
+  
+  as.data.frame(melt(FLEP,id="Fvalues") %>% 
+                  group_by(variable) %>%
+                  arrange(abs(value-1)) %>% #desired FLEP=1
+                  slice(1) %>%
+                  #mutate(value=round(value,2)) %>%
+                  mutate(FLEPlevel=rep(1))),
+  
+  as.data.frame(melt(FLEP,id="Fvalues") %>% 
+                  group_by(variable) %>%
+                  arrange(abs(value-0.8)) %>% #desired FLEP=0.8
+                  slice(1) %>%
+                  #mutate(value=round(value,2)) %>%
+                  mutate(FLEPlevel=rep(0.8))),
+  
+  as.data.frame(melt(FLEP,id="Fvalues") %>% 
+                  group_by(variable) %>%
+                  arrange(abs(value-0.5)) %>% #desired FLEP=0.5
+                  slice(1) %>%
+                  #mutate(value=round(value,2)) %>%
+                  mutate(FLEPlevel=rep(0.5))),
+  
+  as.data.frame(melt(FLEP,id="Fvalues") %>% 
+                  group_by(variable) %>%
+                  arrange(abs(value-0.35)) %>% #desired FLEP=0.35
+                  slice(1) %>%
+                  #mutate(value=round(value,2)) %>%
+                  mutate(FLEPlevel=rep(0.35))),
+  
+  as.data.frame(melt(FLEP,id="Fvalues") %>% 
+                  group_by(variable) %>%
+                  arrange(abs(value-0.2)) %>% #desired FLEP=0.2
+                  slice(1) %>%
+                  #mutate(value=round(value,2)) %>%
+                  mutate(FLEPlevel=rep(0.2))) 
+  
+)
+target_Fs
 
+
+# *************************************** #
+# (7) Now that timeseries data is formated, let's plot!
+# *************************************** #
+
+tt <- final[final$FLEP %in% target_FLEP,]
 
 # plot eggs - one plot per pop, on each plot 5 lines for different F levels
 p <- list()
 for (i in 1:length(codNames)){
-
-  p[[i]] <- ggplot(ts.data[ts.data$variable == "eggs" & ts.data$codNames == codNames[i],], 
+  
+  p[[i]] <- ggplot(final[final$variable == "eggs" & 
+                           final$codNames == codNames[i] &
+                           final$FLEP %in% target_FLEP,], 
                    aes(x=year,y=value,color=FLEP)) +
     xlab("year") + ylab("egg production") +
     geom_line() +
@@ -308,6 +337,42 @@ pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/Nsize_for_diff_FLEPs
 do.call(grid.arrange,c(p,ncol=2))
 dev.off()
 rm(p,i)
+
+# ------------------------------------------------------------------------- #
+#  
+# ------------------------------------------------------------------------- #
+
+    
+    
+  # ---
+  # Define alpha for pop i -- this is a big deal!
+  alpha <- 1/FLEPinfo[FLEPinfo$FLEPlevel == 0.35,]$LEP
+  alphas[i] <- alpha #save alphas for popultions. 
+  # --- #
+  # make sure enough of a fishing range to get pops down to 0.2 FLEP. Look at: 
+#FLEPinfoDF <- do.call("rbind",FLEPinfolist)
+#alphatable <- cbind(codNames,as.data.frame(alphas))
+
+# CHECK THIS: is alpha related to high fishing at FLEP=0.2?
+#plot(x = FLEPinfoDF[FLEPinfoDF$FLEPlevel == 0.35,]$Fvalues,
+#     y = alphas, ylab="alpha = 1/(LEP*0.35)", xlab="F at FLEP=0.2")
+#text(alphas~FLEPinfoDF[FLEPinfoDF$FLEPlevel == 0.35,]$Fvalues, 
+#     labels=codNames,cex=0.9, font=2, pos=3)
+  rm(L_inf,K,TEMP,B0,B1) #rm these variables after each loop, seems safer
+ 
+rm(i,eigenvals1,eigenvals2,eigenvals12,Leslieout,A,FLEPinfo,
+   target_Fs,target_LEPs,Alist,LEP,FLEP,FLEP.F,FLEP.LEP,
+   MG,Mp,name,rm_first_timesteps,S50,f) #clean up
+
+
+
+# ------------------------------------------------------------------------- #
+# --- 
+# ------------------------------------------------------------------------- #
+
+
+
+
 
 
 # ------------------------------------------------------------------------- #
