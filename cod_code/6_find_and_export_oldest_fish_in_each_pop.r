@@ -34,24 +34,24 @@ max_ages_table$max_ages_occurances <- as.numeric(as.character(max_ages_table$max
 # plot abundance at age for every year. 
 # x axis --> age, y --> abundance (CANUM), one line for each year
 #pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/abundnace_at_age.pdf', width=20, height=30)
-p <- list()
-for (i in 1:length(codNames)) {
-  pop <- datalist[[12]]
-  pop <- pop[pop$AGE > 5,] # plot abundance at older ages to see contrast better
-  pop <- pop[pop$YEAR %in% c('1965','1970','1975','1980','1985','1990','1995','2000','2005'),]
+#p <- list()
+#for (i in 1:length(codNames)) {
+#  pop <- datalist[[12]]
+#  pop <- pop[pop$AGE > 5,] # plot abundance at older ages to see contrast better
+#  pop <- pop[pop$YEAR %in% c('1965','1970','1975','1980','1985','1990','1995','2000','2005'),]
     # plot only a few years so it isn't as messy
   #pop$CANUM <- as.numeric(as.character(pop$CANUM)) # convert abundances to numeric
   #pop$YEAR <- as.numeric(as.character(pop$YEAR))
   #pop$YEAR <- factor(pop$YEAR)
 
-  p[[i]] <- ggplot(data=pop, aes(x=AGE, y=CANUM, color=YEAR)) + 
-            geom_line() + 
-            theme(legend.position='none') +
-            ggtitle(codNames[12]) +
-            scale_colour_gradient2()
-}
+#  p[[i]] <- ggplot(data=pop, aes(x=AGE, y=CANUM, color=YEAR)) + 
+#            geom_line() + 
+#            theme(legend.position='none') +
+#            ggtitle(codNames[12]) +
+#            scale_colour_gradient2()
+#}
 #do.call(grid.arrange,p)
-rm(p,i)
+#rm(p,i)
 #dev.off()
 
 # ===> this wasn't working, so trying bubble plots. 

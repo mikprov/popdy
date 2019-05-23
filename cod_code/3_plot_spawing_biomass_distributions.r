@@ -3,6 +3,8 @@
 
 library(ggplot2)
 library(gridExtra)
+library(tidyr)
+library(dplyr)
 # ---
 # Load functions:
 source("C:/Users/provo/Documents/GitHub/popdy/cod_code/2_cod_functions.r")
@@ -22,6 +24,14 @@ max_ages_table[max_ages_table$codNames == "cod2J3KL", ]$max_ages <- 17
 max_ages_table
 
 # ---
+# reorder pops by peak spawning age
+# load peak spawning age info
+eigentable = read.csv("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable.csv",
+                      header=TRUE,stringsAsFactors = FALSE)
+eigentable = as.data.frame(eigentable)
+codNames_ordered_by_peak <- eigentable %>% arrange(mode_age) %>% pull(codNames)
+codNames_ordered_by_peak_plot <- eigentable %>% arrange(mode_age) %>% pull(codNames_plot)
+# ---
 # Plot spawning biomass distribution -- new way: treat as probability distribution
 # y axis = probability of spawning
 # x axis = age
@@ -35,10 +45,11 @@ F.halfmax = 0
 # note: need to recalculate sd with mode, instead of mean
 
 p <- list()
-for (i in 1:length(codNames)) { # step through each cod population
+names(p) <- codNames_ordered_by_peak
+for (i in 1:length(codNames_ordered_by_peak)) { # step through each cod population
  
   # this should load parms: L_inf, K, TEMP, maxage
-  source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codNames[i], '.r', sep=''))
+  source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codNames_ordered_by_peak[i], '.r', sep=''))
   # calculate LEP at each age
   lsb.at.k = calculate_LSB_at_age_by_F(maxage=maxage,L_inf=L_inf,K=K,TEMP=TEMP,
                                        F.halfmax=F.halfmax,B0=B0,B1=B1)
@@ -56,14 +67,24 @@ for (i in 1:length(codNames)) { # step through each cod population
   # Plot spawning distribution for each population:
   p[[i]] <- ggplot(keep,aes(x=Ages,y=p_spawn)) +
     geom_line() + theme_classic() + xlab("Age") + 
-    ylab("Pr(spawning)") + ggtitle(paste(codNames[i])) +
+    ylab("Pr(spawning)") + ggtitle(paste(codNames_ordered_by_peak_plot[i])) +
     scale_x_continuous(limits = c(0,25)) +
     scale_y_continuous(limits = c(0,0.35)) +
-    geom_vline(xintercept=mode_age[i],linetype="dotted")
+    geom_vline(xintercept=mode_age[i],linetype="dashed") +
+    geom_text(x=(mode_age[i]+2), y=0.30, label=mode_age[i], size=4) +
+    theme(text = element_text(size = 10))
     
 }
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/SBplot_nofishing_probofspawning_v4.pdf', width=7, height=10)
-do.call(grid.arrange,c(p,ncol=3))
+# Export high res fig
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/fig1_spawning_distributions.tiff', units="in", width=7, height=7, res=300)
+do.call(grid.arrange,c(p,ncol=4))
+dev.off()
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/fig1_spawning_distributions_subplot.tiff', units="in", width=6, height=1.75, res=300)
+do.call(grid.arrange,c(p[c(1,9,11,16)],ncol=4))
+dev.off()
+# Export pdf
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/SBplot_nofishing_probofspawning_v5.pdf', width=7, height=8)
+do.call(grid.arrange,c(p,ncol=4))
 dev.off()
 
 

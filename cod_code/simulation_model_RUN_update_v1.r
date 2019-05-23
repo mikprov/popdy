@@ -12,6 +12,14 @@ source("C:/Users/provo/Documents/GitHub/popdy/cod_code/simulation_model_cod_v3.r
 # load functions
 source("C:/Users/provo/Documents/GitHub/popdy/cod_code/2_cod_functions.r")
 
+# load maxages
+source("C:/Users/provo/Documents/GitHub/popdy/cod_code/6_find_and_export_oldest_fish_in_each_pop.r")
+max_ages_table
+# load peak spawning age info
+eigentable = read.csv("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable.csv",
+                      header=TRUE,stringsAsFactors = FALSE)
+eigentable = as.data.frame(eigentable)
+
 # load cod data, break into separate populations
 #source("C:/Users/provo/Documents/GitHub/popdy/cod_code/0_load_cod_data.r")
 # I don't think I need the actual data since I'm pulling maturity 
@@ -23,19 +31,9 @@ codNames <- c("Northsea","Coas","W_Baltic",
               "cod3NO","cod3M","cod2J3KL",
               "cod3Ps")
 
-# ---
-# create empty objects for simulation
-freq = seq(from=0.001111111, to=0.5, by=0.001111111) #all frequencies, for plotting later
-spall = matrix(NA, length(freq),length(eigentable$codNames)) #set up empty matrix, spec for all plots
-outputL = vector("list", length(eigentable$codNames)) #create empty list to store sim output
-names(outputL) = eigentable$codNames
-# ---
-
-
-
 
 # *************************************** #
-# (1) calc LEP from range of F values (create LEP matrix)
+# (0) calc LEP from range of F values (create LEP matrix) -- NO FISHING, NOT NEEDED ANYMORE
 # *************************************** #
 Fvalues = seq(0,3,by=0.01) #Check max F value (some pops can withstand high F)
 FLEP = matrix(NA,nrow=length(Fvalues),ncol=length(codNames)) #store FLEP values here
@@ -59,7 +57,7 @@ for (i in 1:length(codNames)) { #step through each cod population
 
 
 # *************************************** #
-# (2) calc FLEP from LEPmatrix (create FLEP matrix)
+# (0) calc FLEP from LEPmatrix (create FLEP matrix) - NO FISHING, NOT NEEDED ANYMORE
 # *************************************** #
 # here I calculate FLEP: LSB at all F levels / LSB at F=0
 FLEP = t(t(LEPmatrix)/LEPmatrix[1,])
@@ -75,12 +73,13 @@ FLEPvsF <- ggplot(FLEPplot,aes(x=Fvalues,y=log(value),color=pop)) +
 
 
 # *************************************** #
-# (3) Generate Leslie matricies for diff F values (create Leslie arrays)
+# (1) Generate Leslie matricies for diff F values (create Leslie arrays)
 # *************************************** #
+Fvalues = seq(0,0,by=1) #Check max F value (some pops can withstand high F)
 Aarray = as.list(rep(NA,length(codNames))) #Leslie matrix storage for each F value for pop i
-eigenvals1 = matrix(NA,nrow=length(FLEP$Fvalues),ncol=length(codNames)) 
-eigenvals2 = matrix(NA,nrow=length(FLEP$Fvalues),ncol=length(codNames))
-eigenvals12 = matrix(NA,nrow=length(FLEP$Fvalues),ncol=length(codNames))
+eigenvals1 = matrix(NA,nrow=length(Fvalues),ncol=length(codNames)) 
+eigenvals2 = matrix(NA,nrow=length(Fvalues),ncol=length(codNames))
+eigenvals12 = matrix(NA,nrow=length(Fvalues),ncol=length(codNames))
 
 
 for (i in 1:length(codNames)){ #for each pop i
@@ -92,10 +91,12 @@ for (i in 1:length(codNames)){ #for each pop i
   e2 = rep(NA,length=length(Fvalues)) #store lambda2
   e12 = rep(NA,length=length(Fvalues)) #store inverse damping ratio
   
-  for (f in 1:length(FLEP$Fvalues)){ #step through F values 
+  for (f in 1:length(Fvalues)){ #step through F values 
     # create Leslie matrix:
     Leslieout = assemble_Leslie(maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
-                                F.halfmax=FLEP$Fvalues[f], tknot=0, B0=B0, B1=B1)
+                                F.halfmax=Fvalues[f], B0=B0, B1=B1, tknot=0)
+    # transform fecundity-at-age to probability density curve
+    Leslieout$A[1,] <- (Leslieout$A[1,]/sum(Leslieout$A[1,]))*10
     Lesliearray[,,f] = Leslieout$A #3D array of Leslie matricies
     e1[f] = extract_first_eigen_value(Leslieout$A)
     e2[f] = extract_second_eigen_value(Leslieout$A)
@@ -114,13 +115,14 @@ rm(e1,e2,e12,i,f,Leslieout,Lesliearray) #clean up
 # (4) Simulate pops. Loop over Aarray list to simulate using different Leslie matrices 
 # *************************************** #
 # set params for simulation:
-timesteps = 200 #need this now to create
-rm_first_timesteps = 50
-beta = 100 
+timesteps = 500 #need this now to create
+rm_first_timesteps = 100
+beta = 1000 
 initial_eggs = 100
-sig_r = 0.7
+sig_r = 0.3
 span.multiplier = 1 # what is this again?
-alphas <- rep(50, length=length(codNames)) #alpha could be diff for pops
+alphas <- rep(1.2, length=length(codNames)) #alpha could be diff for pops
+#alphas <- c(2.02,8.38,4.1,2.10,3.77,2.10,3.24,4.3,5.54,0.48,1.69,0.77,2.31,0.42,1.22)
 
 output.3d.list <- as.list(rep(NA,length=length(codNames))) #store timeseries here
 names(output.3d.list) <- codNames
@@ -207,7 +209,7 @@ rm(df.list) #clean up
 ts.data <- rbind(eggs.ts,recruits.ts,nsize.ts) #combine data
 rownames(ts.data) <- NULL
 
-# add FLEP levels from FLEP df to ts.data (matching on Fvalues)
+# add FLEP levels from FLEP df to ts.data (matching on Fvalues) -- NOT NEEDED
 final <- matrix(NA,nrow = 0, ncol = (ncol(ts.data) + 1))
 final <- as.data.frame(final)
 names(final) <- c(names(ts.data),'FLEP')
@@ -224,7 +226,7 @@ rm(i,sub,sub2,merged)
 head(final)
 
 # *************************************** #
-# (6) Subset final to have F values associated with tarvel FLEP levels 
+# (0) Subset final to have F values associated with tarvel FLEP levels -- NOT NEEDED
 # *************************************** #
 # find the nearest F values that correspond to the desired FLEP value
 target_Fs <- rbind(
@@ -234,7 +236,7 @@ target_Fs <- rbind(
                   arrange(abs(value-1)) %>% #desired FLEP=1
                   slice(1) %>%
                   #mutate(value=round(value,2)) %>%
-                  mutate(FLEPlevel=rep(1))),
+                  mutate(FLEPlevel=rep(1))))#,
   
   as.data.frame(melt(FLEP,id="Fvalues") %>% 
                   group_by(variable) %>%
@@ -266,6 +268,7 @@ target_Fs <- rbind(
   
 )
 #target_FLEP = c(1,0.8,0.5,0.35,0.2)
+target_FLEP = c(1)
 
 sublist = as.list(NA, rep(length(codNames)))
 for (i in 1:length(codNames)){
@@ -275,49 +278,123 @@ for (i in 1:length(codNames)){
   sublist[[i]] <- sub3
 }
 finaltargets <- do.call(rbind,sublist)
+finaltargets$FLEP <- round(finaltargets$FLEP,digits=2)
+table(finaltargets$FLEP)
+finaltargets$FLEP[finaltargets$FLEP == "0.26"]<- 0.2
+finaltargets$FLEP[finaltargets$FLEP %in% c("0.79","0.81")]<- 0.8
 rm(i,sub,sub2,sub3,sublist) #clean up
 
 
 
 # *************************************** #
-# (7) Now that timeseries data is formated, let's plot!
+# (6) Now that timeseries data is formated, let's plot!
 # *************************************** #
 
 # plot eggs - one plot per pop, on each plot 5 lines for different F levels
 p <- list()
-for (i in 1:length(codNames)){
+# reorder codNames by peak spawning age (increasing)
+codNames_ordered_by_peak <- eigentable %>% arrange(mode_age) %>% pull(codNames)
+sd_ordered <- rep(NA,length=length(codNames_ordered_by_peak))
+mean_ordered <- rep(NA,length=length(codNames_ordered_by_peak))
+CV_ordered <- rep(NA,length=length(codNames_ordered_by_peak))
+
+for (i in 1:length(codNames_ordered_by_peak)){
   
-  p[[i]] <- ggplot(finaltargets[finaltargets$variable == "eggs" & 
-                                  finaltargets$codNames == codNames[i],], 
-                   aes(x=year,y=value,color=Fval)) +
+  dd <- ts.data[ts.data$variable == "eggs" & 
+                  ts.data$codNames == codNames_ordered_by_peak[i] &
+                  ts.data$year %in% seq(from=rm_first_timesteps,to=(timesteps-2),by=1),]
+  
+  p[[i]] <- ggplot(dd, #aes(x=year,y=value,color=Fval)) +
+                   aes(x=year,y=value)) +
     xlab("year") + ylab("egg production") +
-    geom_line() +
-    scale_color_brewer(palette = "Reds") +
-    ggtitle(paste(codNames[i])) +
-    theme_classic()
+    geom_line() + theme_classic() +
+    #scale_color_brewer(palette = "Reds") +
+    ggtitle(paste(codNames_ordered_by_peak[i],"sd=",
+                  round(sd(dd$value),digits=1)))
+    
+  sd_ordered[i] <- sd(dd$value)
+  mean_ordered[i] <- mean(dd$value)
+  CV_ordered[i] <- sd_ordered[i]/mean_ordered[i]
 }
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/egg_production_for_diff_FLEPs_alpha50.pdf', width=7, height=10) #note: file name specifies the alpha used in simluation model
-do.call(grid.arrange,c(p,ncol=2))
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/egg_production_for_diff_FLEPs_alpha50_meanvsStdev.pdf', width=7, height=10) #note: file name specifies the alpha used in simluation model
+do.call(grid.arrange,c(p,ncol=3))
+
+par(mfrow=c(2,2))
+plot(x=eigentable %>% arrange(mode_age) %>% pull(mode_age),y=mean_ordered,
+           xlab="peak spawning age", ylab="eggs timseries mean")
+plot(x=eigentable %>% arrange(mode_age) %>% pull(mode_age),y=sd_ordered,
+           xlab="peak spawning age", ylab="eggs timseries Stdev")
+plot(x=eigentable %>% arrange(mode_age) %>% pull(mode_age),y=CV_ordered,
+           xlab="peak spawning age", ylab="eggs timseries CV")
+par(mfrow=c(1,1))
 dev.off()
-rm(p,i)
+rm(p,i,dd)
+
+# calculate CV of each timeseries (for eggs)
+CV <- function(mean, sd){ (sd/mean)*100 }
+cv.list <- as.list(NA,rep=length(codNames))
+for (i in 1:length(codNames)){
+  print(i)
+  sub <- final[final$variable == "recruits" & final$codNames == codNames[i],]
+  cv <- rep(NA,length=length(Fvalues))
+  
+  for (f in 1:length(Fvalues)) {
+  sub2 <- sub[sub$Fval == Fvalues[f],]$value
+  cv[f] <- CV(mean=mean(sub2),sd=sd(sub2))  }
+  
+  cv.list[[i]] <- cv
+}
+cvdata <- do.call(cbind,cv.list)
+colnames(cvdata) <- codNames
+cvdata <- as.data.frame(cvdata)
+colnames(cvdata)
+cvdata$Fvalues <- Fvalues
+cvdata.long <- cvdata %>% gather(codNames,value,1:length(codNames))
+head(cvdata.long)
+
+ggplot(cvdata.long,aes(x=Fvalues,y=log2(value),color=codNames)) +
+  geom_line() + ylab("log2 CV recruits")
+
 
 
 
 #plot recruitment - one plot per pop, similar to egg plots
 p <- list()
+codNames_ordered_by_peak <- eigentable %>% arrange(mode_age) %>% pull(codNames)
+sd_ordered <- rep(NA,length=length(codNames_ordered_by_peak))
+mean_ordered <- rep(NA,length=length(codNames_ordered_by_peak))
+CV_ordered <- rep(NA,length=length(codNames_ordered_by_peak))
+
 for (i in 1:length(codNames)){
-  p[[i]] <- ggplot(finaltargets[finaltargets$variable == "recruits" & 
-                                  finaltargets$codNames == codNames[i],], 
-                   aes(x=year,y=value,color=Fval)) + 
-    xlab("year") + ylab("recruits") +
-    geom_line() + scale_color_brewer(palette = "Reds") +
-    ggtitle(paste(codNames[i])) +
-    theme_classic()
+  dd <- finaltargets[finaltargets$variable == "recruits" & 
+                       finaltargets$codNames == codNames_ordered_by_peak[i] &
+                       finaltargets$year %in% seq(from=rm_first_timesteps,to=(timesteps-2),by=1),]
+  
+  p[[i]] <- ggplot(dd, #aes(x=year,y=value,color=Fval)) +
+                   aes(x=year,y=value)) +
+    xlab("year") + ylab("recruits (before noise)") +
+    geom_line() + theme_classic() + ylim(85,100) +
+    #scale_color_brewer(palette = "Reds") +
+    ggtitle(paste(codNames_ordered_by_peak[i],"sd=",
+                  round(sd(dd$value),digits=1)))
+  
+  sd_ordered[i] <- sd(dd$value)
+  mean_ordered[i] <- mean(dd$value)
+  CV_ordered[i] <- sd_ordered[i]/mean_ordered[i]
 }
-pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/recruitment_beforenoise_for_diff_FLEPs_alpha50.pdf', width=7, height=10) #note: file name specifies the alpha used in simluation model
-do.call(grid.arrange,c(p,ncol=2))
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/recruitment_beforenoise_for_diff_FLEPs_alpha50_meanvsSTDEV.pdf', width=7, height=10) #note: file name specifies the alpha used in simluation model
+do.call(grid.arrange,c(p,ncol=3))
+
+par(mfrow=c(2,2))
+plot(x=eigentable %>% arrange(mode_age) %>% pull(mode_age),y=mean_ordered,
+     xlab="peak spawning age", ylab="recruits timseries mean")
+plot(x=eigentable %>% arrange(mode_age) %>% pull(mode_age),y=sd_ordered,
+     xlab="peak spawning age", ylab="recruits timseries Stdev")
+plot(x=eigentable %>% arrange(mode_age) %>% pull(mode_age),y=CV_ordered,
+     xlab="peak spawning age", ylab="recruits timseries CV")
+par(mfrow=c(1,1))
 dev.off()
-rm(p,i)
+rm(p,i,dd)
 
 #plot pop size - one plot per pop, similar to egg & recruitment plots
 p <- list()
@@ -336,7 +413,221 @@ dev.off()
 rm(p,i)
 
 
+# *************************************** #
+# (8) Calculate frequency content from timeseries
+# *************************************** #
+# Plan:
+# 1. Walk through each cod pop, do spectral analysis at F levels
+# 2. Store spec values for eggs, recruits, and Nsize
 
+dataNAs <- rep(NA,200*length(target_FLEP)*length(codNames))
+sp.eggs <- array(dataNAs,dim=c(200,length(target_FLEP),length(codNames)))#3D object for spec analysis  
+sp.recruit <- array(dataNAs,dim=c(200,length(target_FLEP),length(codNames)))#3D object for spec analysis
+sp.nsize <- array(dataNAs,dim=c(200,length(target_FLEP),length(codNames)))#3D object for spec analysis 
+
+for (i in 1:length(codNames)){
+  
+  ts <- finaltargets[finaltargets$codNames == codNames[i],] #subset data for pop i 
+  
+  # setting 'span' - a vector of odd integers to specify the smoothers
+  tmp <- ceiling(sqrt(length(1:(timesteps-rm_first_timesteps-1)))) #sq root of timeseries lgth, rounded
+  if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp} #make it odd, if the square root is even
+  m = m * span.multiplier
+  
+  # --- spectral analysis on EGGS --- #
+  e = matrix(NA, nrow=200, ncol=length(target_FLEP)) #store egg sp vals at FLEP (Fval) levels here
+  
+  for (f in 1:length(target_FLEP)){ #step through FLEP levels
+    
+    # find the difference between the timeseries signal and the mean
+    xx = ts[ts$variable == "eggs" & ts$FLEP == target_FLEP[f],]$value[rm_first_timesteps:(timesteps-2)]-mean(ts[ts$variable == "eggs" & ts$FLEP == target_FLEP[f],]$value[rm_first_timesteps:(timesteps-2)])
+    
+    sp = spec.pgram(x=xx,spans=c(m,m),plot = FALSE)
+    ee = 2*sp$spec
+    names(ee) <- target_FLEP[f]
+    e[,f] <- ee
+  } #save spec output for plotting pops together, Helen Wearing says to multiply by 2
+  rm(xx)
+  
+  # --- spectral analysis on RECRUIT --- #
+  r = matrix(NA, nrow=200, ncol=length(target_FLEP)) #store recruit sp vals at FLEP levels here
+  yy = ts[ts$variable == "recruits" & ts$FLEP == target_FLEP[f],]$value[rm_first_timesteps:(timesteps-2)]-mean(ts[ts$variable == "recruits" & ts$FLEP == target_FLEP[f],]$value[rm_first_timesteps:(timesteps-2)])
+  
+  for (f in 1:length(target_FLEP)){ #step through FLEP levels
+    sp = spec.pgram(yy,spans=c(m,m),plot = FALSE)
+    rr = 2*sp$spec
+    names(rr) <- target_FLEP[f]
+    r[,f] <- rr
+  } #save spec output for plotting pops together, Helen Wearing says to multiply by 2
+  rm(yy)
+  
+  # --- spectral analysis on NSIZE --- #
+  n = matrix(NA, nrow=200, ncol=length(target_FLEP)) #store nsize sp vals at FLEP levels here
+  zz = ts[ts$variable == "Nsize" & ts$FLEP == target_FLEP[f],]$value[rm_first_timesteps:(timesteps-2)]-mean(ts[ts$variable == "Nsize" & ts$FLEP == target_FLEP[f],]$value[rm_first_timesteps:(timesteps-2)])
+  
+  for (f in 1:length(target_FLEP)){ #step through FLEP levels
+    sp = spec.pgram(zz,spans=c(m,m),plot = FALSE)
+    nn = 2*sp$spec
+    names(nn) <- target_FLEP[f]
+    n[,f] <- nn
+  } #save spec output for plotting pops together, Helen Wearing says to multiply by 2
+  rm(zz)
+  
+  sp.eggs[,,i] = e # save matrix of spec values for different FLEP, index by pop i
+  sp.recruit[,,i] = r # save matrix of spec values for different FLEP, index by pop i
+  sp.nsize[,,i] = n # save matrix of spec values for different FLEP, index by pop i
+  
+}
+freq = sp$freq
+rm(i,f,sp,e,r,n,tmp,m) #clean up
+
+
+
+# *************************************** #
+# (9) Plot spectral analysis 
+# *************************************** #
+
+# Plan
+# 1. re-arrange 3d dataframes for plotting (sp.eggs, sp.recruit, sp.nsize)
+# 2. combine all 3 variable type data frames to make one df 
+# 3. plot
+
+# 1. re-arrange egg dataframe
+templist <- as.list(rep(NA,length=length(codNames)))
+names(templist) <- codNames
+for (i in 1:length(codNames)){
+  df <- as.data.frame(sp.eggs[,,i])
+  colnames(df) <- c("FLEP1")
+  df$freq <- freq
+  df$variable.type <- rep("eggs",length=length(freq))
+  df$codNames <- rep(paste(codNames[i]),length=length(freq))
+  templist[[i]] <- df
+}
+specdata.e <- do.call("rbind",templist)
+rownames(specdata.e) <- NULL
+rm(i,templist,df)
+
+# re-arrange recruit dataframe
+templist <- as.list(rep(NA,length=length(codNames)))
+names(templist) <- codNames
+for (i in 1:length(codNames)){
+  df <- as.data.frame(sp.recruit[,,i])
+  colnames(df) <- c("FLEP1")
+  df$freq <- freq
+  df$variable.type <- rep("recruit",length=length(freq))
+  df$codNames <- rep(paste(codNames[i]),length=length(freq))
+  templist[[i]] <- df
+}
+specdata.r <- do.call("rbind",templist)
+rownames(specdata.r) <- NULL
+rm(i,templist,df)
+
+# re-arrange nsize dataframe
+templist <- as.list(rep(NA,length=length(codNames)))
+names(templist) <- codNames
+for (i in 1:length(codNames)){
+  df <- as.data.frame(sp.nsize[,,i])
+  colnames(df) <- c("FLEP1")
+  df$freq <- freq
+  df$variable.type <- rep("nsize",length=length(freq))
+  df$codNames <- rep(paste(codNames[i]),length=length(freq))
+  templist[[i]] <- df
+}
+specdata.n <- do.call("rbind",templist)
+rownames(specdata.n) <- NULL
+rm(i,templist,df)
+
+# 2. combine all 3 data frames
+specdata <- rbind(specdata.e, specdata.r, specdata.n)
+specdatalong <- specdata %>% gather(FLEP,value,1) #ready for ggplot
+
+# 3. plot frequency content of eggs
+p <- list()
+for (i in 1:length(codNames_ordered_by_peak)){
+  p[[i]] <- ggplot(data=specdatalong[specdatalong$variable.type == "eggs" 
+                                   & specdatalong$codNames==codNames_ordered_by_peak[i],],
+                 #aes(x=freq,y=log10(value),color=FLEP)) + 
+                 aes(x=freq,y=log10(value))) + 
+  geom_line() + theme_classic() + ylim(-0.2,7) +
+  geom_vline(xintercept = (1/eigentable[eigentable$codNames == codNames_ordered_by_peak[i],]$mode_age),
+             linetype="dotted") +
+  ggtitle(paste(codNames_ordered_by_peak[i])) + ylab("log(eggs)") +
+  ggtitle(paste(codNames_ordered_by_peak[i]," mode=",
+                eigentable[eigentable$codNames == codNames_ordered_by_peak[i],]$mode_age)) 
+#+ scale_color_brewer(palette = "Reds")
+
+}
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/spec_eggs_alpha50_log10_nofishing.pdf', width=7, height=14) #note: file name specifies the alpha used in simluation model
+do.call(grid.arrange,c(p,ncol=3))
+dev.off()
+rm(p,i)
+
+# -- recruits plotting -- #
+p <- list()
+for (i in 1:length(codNames_ordered_by_peak)){
+  p[[i]] <- ggplot(data=specdatalong[specdatalong$variable.type == "recruit" 
+                                     & specdatalong$codNames==codNames_ordered_by_peak[i],],
+                  # aes(x=freq,y=log10(value),color=FLEP)) + 
+                   aes(x=freq,y=log10(value))) + 
+    geom_line()  + theme_classic() + ylim(-5,2) +
+    geom_vline(xintercept = (1/eigentable[eigentable$codNames == codNames_ordered_by_peak[i],]$mode_age),
+               linetype="dotted") +
+    ggtitle(paste(codNames_ordered_by_peak[i]," mode=",
+                  eigentable[eigentable$codNames == codNames_ordered_by_peak[i],]$mode_age)) + 
+    ylab("log(recruits)")
+    #+ scale_color_brewer(palette = "Reds")
+  
+}
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/spec_recruitsbeforenoise_alpha50_log10.pdf', width=7, height=14) #note: file name specifies the alpha used in simluation model
+do.call(grid.arrange,c(p,ncol=3))
+dev.off()
+rm(p,i)
+
+# -- Nsize plotting -- #
+p <- list()
+for (i in 1:length(codNames)){
+  p[[i]] <- ggplot(data=specdatalong[specdatalong$variable.type == "nsize" 
+                                     & specdatalong$codNames==codNames[i],],
+                   aes(x=freq,y=value,color=FLEP)) + 
+    geom_line() + scale_color_brewer(palette = "Reds") + theme_classic() + 
+    ggtitle(paste(codNames[i]))
+  
+}
+pdf(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/spec_Nsize_alpha50.pdf', width=7, height=14) #note: file name specifies the alpha used in simluation model
+do.call(grid.arrange,c(p,ncol=2))
+dev.off()
+rm(p,i)
+
+
+# *************************************** #
+# (10) Area under curve
+# *************************************** #
+head(specdatalong)
+AUC_greater <- rep(NA,length=length(codNames_ordered_by_peak))
+AUC_less <- rep(NA,length=length(codNames_ordered_by_peak))
+AUC_total <- rep(NA,length=length(codNames_ordered_by_peak))
+AUCperlow <- rep(NA,length=length(codNames_ordered_by_peak))
+AUCperhigh <- rep(NA,length=length(codNames_ordered_by_peak))
+
+AUCthreshold <- 0.3
+
+for (i in 1:length(codNames_ordered_by_peak)){
+  AUC_greater[i] <- sum(specdatalong[specdatalong$variable.type == "eggs" 
+                             & specdatalong$codNames==codNames_ordered_by_peak[i]
+                             & specdatalong$freq > AUCthreshold,]$value)
+  AUC_less[i] <- sum(specdatalong[specdatalong$variable.type == "eggs" 
+                                     & specdatalong$codNames==codNames_ordered_by_peak[i]
+                                     & specdatalong$freq < AUCthreshold,]$value)
+  AUC_total[i] <- sum(specdatalong[specdatalong$variable.type == "eggs" 
+                                & specdatalong$codNames==codNames_ordered_by_peak[i],]$value)
+  AUCperlow[i] <- AUC_less[i]/AUC_total[i]
+  AUCperhigh[i] <- AUC_greater[i]/AUC_total[i]
+}
+par(mfrow=c(2,2))
+plot(x=eigentable$mode_age, y=AUCperhigh,main="threshold=0.05",xlab="peak spawning age")
+plot(x=eigentable$mode_age, y=AUCperhigh,main="threshold=0.1",xlab="peak spawning age")
+plot(x=eigentable$mode_age, y=AUCperhigh,main="threshold=0.2",xlab="peak spawning age")
+plot(x=eigentable$mode_age, y=AUCperhigh,main="threshold=0.3",xlab="peak spawning age")
 
 
 # ------------------------------------------------------------------------- #
@@ -375,133 +666,6 @@ rm(i,eigenvals1,eigenvals2,eigenvals12,Leslieout,A,FLEPinfo,
 
 
 
-
-# ------------------------------------------------------------------------- #
-# --- Calculate frequency content from timeseries
-# ------------------------------------------------------------------------- #
-
-# From earlier above, I have:
-# 1. [output.3d.list] a list of 3d arrays. Each array is timeseries output
-#    from simulations at different F levels. 
-
-# Plan:
-# 1. Walk through each cod pop, calculate spectral analysis at different F levels
-# 2. Store spec values for eggs, recruits, and Nsize at different FLEP levels
-dataNAs <- rep(NA,length(freq)*5*length(codNames))
-sp.eggs <- array(dataNAs,c(length(freq),5,length(codNames)))# 3D object with spectral analysis for 
-sp.recruit <- array(dataNAs,c(length(freq),5,length(codNames)))# 3D object with spectral analysis for 
-sp.nsize <- array(dataNAs,c(length(freq),5,length(codNames)))# 3D object with spectral analysis for 
-
-for (i in 1:length(codNames)){
-
-  ts3d <- output.3d.list[[i]] #subset list to data for pop i 
-  
-  # setting 'span' - a vector of odd integers to specify the smoothers
-  tmp <- ceiling(sqrt(length(1:(timesteps-rm_first_timesteps-1)))) #sq root of timeseries lgth, rounded
-  if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp} #make it odd, if the square root is even
-  m = m * span.multiplier
-  
-  # --- spectral analysis on EGGS --- #
-  e = matrix(NA, length(freq),length(ts3d[1,1,])) #store egg sp vals at FLEP levels here
-  for (f in 1:length(ts3d[1,1,])){ #step through FLEP levels
-    sp = spec.pgram(x=ts3d[,2,f][rm_first_timesteps:(timesteps-2)],spans=c(m,m),plot = FALSE)
-    e[,f] = 2*sp$spec} #save spec output for plotting pops together, Helen Wearing says to multiply by 2
-  
-  # --- spectral analysis on RECRUIT --- #
-  r = matrix(NA, length(freq),length(ts3d[1,1,])) #store recruit sp vals at FLEP levels here
-  for (f in 1:length(ts3d[1,1,])){ #step through FLEP levels
-    sp = spec.pgram(x=ts3d[,3,f][rm_first_timesteps:(timesteps-2)],spans=c(m,m),plot = FALSE)
-    r[,f] = 2*sp$spec} #save spec output for plotting pops together, Helen Wearing says to multiply by 2 
-  
-  # --- spectral analysis on NSIZE --- #
-  n = matrix(NA, length(freq),length(ts3d[1,1,])) #store nsize sp vals at FLEP levels here
-  for (f in 1:length(ts3d[1,1,])){ #step through FLEP levels
-    sp = spec.pgram(x=ts3d[,4,f][rm_first_timesteps:(timesteps-2)],spans=c(m,m),plot = FALSE)
-    n[,f] = 2*sp$spec} #save spec output for plotting pops together, Helen Wearing says to multiply by 2 
-  
-  sp.eggs[,,i] = e # save matrix of spec values for different FLEP, index by pop i
-  sp.recruit[,,i] = r # save matrix of spec values for different FLEP, index by pop i
-  sp.nsize[,,i] = n # save matrix of spec values for different FLEP, index by pop i
-  
-}
-rm(i,f,sp,e,r,n,tmp,m) #clean up
-
-
-
-# ------------------------------------------------------------------------- #
-# --- Plot spectral analysis 
-# ------------------------------------------------------------------------- #
-
-# Plan
-# 1. re-arrange 3d dataframes for plotting (sp.eggs, sp.recruit, sp.nsize)
-# 2. combine all 3 variable type data frames to make one df 
-# 3. plot
-
-# 1. re-arrange egg dataframe
-templist <- as.list(rep(NA,length=length(codNames)))
-names(templist) <- codNames
-for (i in 1:length(codNames)){
-  df <- as.data.frame(sp.eggs[,,i])
-  colnames(df) <- c("FLEP1","FLEP0.8","FLEP0.5","FLEP0.35","FLEP0.2")
-  df$freq <- freq
-  df$variable.type <- rep("eggs",length=length(freq))
-  df$codNames <- rep(paste(codNames[i]),length=length(freq))
-  templist[[i]] <- df
-}
-specdata.e <- do.call("rbind",templist)
-rownames(specdata.e) <- NULL
-rm(i,templist,df)
-
-# re-arrange recruit dataframe
-templist <- as.list(rep(NA,length=length(codNames)))
-names(templist) <- codNames
-for (i in 1:length(codNames)){
-  df <- as.data.frame(sp.recruit[,,i])
-  colnames(df) <- c("FLEP1","FLEP0.8","FLEP0.5","FLEP0.35","FLEP0.2")
-  df$freq <- freq
-  df$variable.type <- rep("recruit",length=length(freq))
-  df$codNames <- rep(paste(codNames[i]),length=length(freq))
-  templist[[i]] <- df
-}
-specdata.r <- do.call("rbind",templist)
-rownames(specdata.r) <- NULL
-rm(i,templist,df)
-
-# re-arrange nsize dataframe
-templist <- as.list(rep(NA,length=length(codNames)))
-names(templist) <- codNames
-for (i in 1:length(codNames)){
-  df <- as.data.frame(sp.nsize[,,i])
-  colnames(df) <- c("FLEP1","FLEP0.8","FLEP0.5","FLEP0.35","FLEP0.2")
-  df$freq <- freq
-  df$variable.type <- rep("nsize",length=length(freq))
-  df$codNames <- rep(paste(codNames[i]),length=length(freq))
-  templist[[i]] <- df
-}
-specdata.n <- do.call("rbind",templist)
-rownames(specdata.n) <- NULL
-rm(i,templist,df)
-
-# 2. combine all 3 data frames
-specdata <- rbind(specdata.e, specdata.r, specdata.n)
-specdatalong <- specdata %>% gather(FLEP,value,1:5) #ready for ggplot
-
-# 3. plot
-
-# 
-ggplot(data=specdatalong[specdatalong$variable.type == "eggs" & specdatalong$codNames=="GM",],
-       aes(x=freq,y=value,color=FLEP)) + geom_line() + 
-       scale_color_brewer(palette = "Reds") + theme_classic()
-
-
-
-ggplot(forplot,aes(x=age,y=value,color=variable)) +
-  ylab("egg production") +
-  xlab("age") +
-  geom_line() +
-  scale_color_brewer(palette = "Reds") +
-  ggtitle(paste(names(LSBlist)[i])) +
-  theme_classic()
 
 
 

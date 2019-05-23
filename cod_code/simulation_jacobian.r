@@ -14,7 +14,7 @@ set.seed(2)
 
 
 toprow <- c(0.01,0.01,0.1,0.2,0.32,0.36)
-toprow <- toprow + 10
+toprow <- toprow * 0.001
 sum(toprow) #should equal 1
 length(toprow) #num age classes
 
@@ -40,7 +40,7 @@ set.seed(2)
 for (t in 1:(tsteps-1)){
   step <- jac %*% tseries[,t] #calc the first age vector
   age1_before_noise[t] <- step[1,1]
-  age1_after_noise[t] <- step[1,1]*sig_r*rnorm(1,mean=0,sd=1) #add some noise to age 1
+  age1_after_noise[t] <- step[1,1]*sig_r*exp(rnorm(1,mean=0,sd=1)) #add some noise to age 1
   step[1,1] <- age1_after_noise[t]
   tseries[,t+1] <- step #store age vector
 }

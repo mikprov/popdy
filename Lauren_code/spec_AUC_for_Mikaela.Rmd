@@ -1,0 +1,382 @@
+---
+title: "spec_AUC_for_Mikaela"
+author: "Lauren Yamane"
+date: "9/12/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+##### 0. Load packages
+```{r Spawning_age_packages}
+# Load packages
+library(data.table)
+library(plyr)
+library(ggplot2)
+library(tidyverse)
+```
+
+### 1. Populations #### From Salmon_Eigenvalues_Slope_Spawning.Rmd for 1.-3.
+```{r Spawning_age_distributions_theoretical, echo = FALSE}
+# Set up generic Populations data table with x as species, y as central spawning age, and z as n_age classes total (max age) for data-based table
+Populations <- data.table(x<-c(rep("chinook", 3), rep("coho", 3), rep("sockeye", 2), rep("chum", 3), "pink"), y <- c(c(3, 4, 5), c(3, 4, 5), c(4, 5), c(3, 4, 5), 2), z <- c(c(4, 5, 6), c(4, 5, 6), c(5, 6), c(4, 5, 6), 3)) 
+setnames(Populations, c("V1", "V2", "V3"), c("species", "central_age","n_ages"))
+
+setkey(Populations, species)
+
+# std_dev_spawn <- seq(0, 0.45, by=0.01)
+k_slope <- seq(0, 1, 0.1)
+#only keep chinook and pink since these cover all possible combinations
+Populations <- Populations[c(1:3,10),]
+mid_prob_chinook <- seq(0.34, 0.99, by = 0.01)
+mid_prob_pink <- seq(0.34, 0.99, by = 0.01)
+```
+```{r mid_prob_spawn_fn}
+mid_prob_spawn <- function(Populations, species, k_slope){ 
+  # Find the central age, and its value as the proportion of the central age spawning.  Then find the fractions at early and late ages. 
+  q <- quote(species)
+  sub <- eval(as.name(paste("mid_", "prob_", as.name(species), sep=""))) # sequence of central spawning age proportions
+  hold1 <- Populations[eval(q),] # picks out rows for a species; also possible:  eval(species) directly
+  hold2 <- hold1[rep((1:nrow(hold1)), each = (length(sub) * length(k_slope)))] 
+# expand the data frame to make room for every combo of k_slope and central spawning probability
+  hold2$k_slope <- rep(k_slope, times = (length(sub)*nrow(hold1)))
+  mid_prob_per_agespecies<-rep(sub, each = length(k_slope))
+  mid_prob <- rep(mid_prob_per_agespecies, times = nrow(hold1))
+# repeat each element in std_dev_species length of k_slope and then do that the length of hold1, multiplied by the number of rows for 1 species. Probably a better way to do this.
+  df_mid_spawn <- cbind(hold2, mid_prob) #cbind mid_prob and hold2
+  }
+
+mid_prob_chin <- mid_prob_spawn(Populations = Populations, species = "chinook", k_slope = k_slope) 
+mid_prob_pk <- mid_prob_spawn(Populations = Populations, species = "pink", k_slope = k_slope)
+hold <- rbind(mid_prob_chin, mid_prob_pk)
+
+### 2. Populations_out #### is a data table that holds every combination of parameter values
+# Note that Populations_out can be used for the fraction that spawn at the central spawn age
+Populations_out <- hold 
+```
+
+```{r cv_spawn}
+### 3. Populations_out_cvspawn #### is the table that calculates the cv_spawn variable for each parameter combination
+#Start with a function that uses Populations_out, figures out a range of cv_spawns corresponding to different early and late probabilities of spawning. 
+Populations_out_cvspawn <- Populations_out %>% 
+  mutate(., early_prob = (1-mid_prob)/2) %>% 
+  mutate(., late_prob = (1-mid_prob)/2) %>% 
+  mutate(., early_age = central_age - 1) %>%
+  mutate(., mean_age = ((central_age * mid_prob) + (early_age * early_prob) + (n_ages * late_prob))) %>%
+  mutate(., var = (early_prob * (early_age - mean_age) ^ 2) + (mid_prob * (central_age - mean_age) ^ 2) + (late_prob * (n_ages - mean_age) ^ 2)) %>%
+  mutate(., cv_spawn = (sqrt(var))/mean_age)
+ ```
+Load packages for the spectral calculatiosn
+```{r load_packages_spec}
+library(tidyverse)
+library(purrrlyr)
+```
+
+```{r agestrucmatrix_stoch_stability}
+### 4. AgeStructMatrix_stoch_stability ### is the function that runs the population simulation over time, given parameter values. #From Salmon_Eigenvalues_Slope_Spawning_thisworks_correctPt_SpecNorm_all_PC.Rmd for 4.-7.
+L = 303
+
+r <- 1
+AgeStructMatrix_stoch_stability <- function(s, a, b, e, l, tf, ncls, sig_r) { 
+  set.seed(40)
+  N0 = c(100, rep(0, ncls-1))
+  sx = rep(s, ncls-1) #Survival vector
+  Nt_stab = matrix(0,tf,ncls+2) 
+	Nt_stab[1,] = c(0,0,N0) 
+	 for (r in 1:(tf-1)){
+      Pt = (e * Nt_stab[r,ncls]) + ((1-l)*(1-e) * Nt_stab[r,ncls+1]) + (1-e)*l*Nt_stab[r,ncls+2] 
+      Nt_stab[r+1,1] = Pt 
+      Nt_stab[r+1,2] = Pt/((1/a) + (Pt/b))# prior to 1/27/16: ((a * Pt)/(1+(b * Pt))) 
+      Nt_stab[r+1,3] = Nt_stab[r+1,2]  * (exp(sig_r * rnorm(1, mean = 0, sd = 1))) #forcing during recruitment
+      Nt_stab[r+1,4:(ncls+2)] = sx * Nt_stab[r,3:(ncls+2-1)] 
+    }
+	return(Nt_stab)
+}
+```
+Look only at cases where cv_spawn >=0.1 and <=0.25, and where k is >=0.2 and <=0.99
+```{r new_figs} 
+Populations_out_cvspawn2 <- Populations_out_cvspawn %>% filter(cv_spawn >=0.1 & cv_spawn <=0.25) %>% filter(k_slope >=0.2 & k_slope <=0.99)
+
+# Some summary stats, if desired
+Populations_out_cvspawn_group <- Populations_out_cvspawn %>% group_by(central_age, k_slope)
+Populations_out_cvspawn_group <- Populations_out_cvspawn_group %>% summarise_at(vars(cv_spawn), mean)
+
+# Parameters
+	ncls_all <- c(4, 5, 6, 3) # Central spawning age based on number of age classes
+	sig_r <- 0.3 # Std dev of recruitment variability
+	tf <- 10000 # Number of time steps
+	
+	early_probs <- parms$early_prob # Probability of spawning early (at central age - 1)
+	late_probs <- parms$late_prob # Probability of spawning late (at central age + 1)
+	alpha <- parms$alpha # Alpha in Beverton-Holt Stock-recruit
+	beta <- 350000 # Beta in B-H stock-recruit equation.  The maximum offspring production with this version of the B-H.
+	cv_spawn <- round(parms$cv_spawn, digits = 2) # Coefficient of variation of spawning age
+	k <- parms$k_slope # Slope of stock-recruit curve at equilibrium
+	n_age <- parms$n_ages # Max number of age classes
+	c_age <- parms$central_age # Central spawning ages
+	constant_cv <- seq(0.1, 0.25, by = 0.01) # Range of constant cv_spawns we care about
+	
+	s_all <- 1 # Survivals from 1 age to another.  Remember that in this case, we put 1's along the subdiagonals of the Leslie matrix.
+	x <- seq(0,500000) #Range of spawning adults to plot
+	c_all <- 1 #(inverse of LEP, which is also 1)
+
+```
+In order to normalize the spectral densities to the number of equilibrium spawners, must calculate equilibrium spawners per recruit first
+```{r r equil_sp_r}
+# Equilibrium Recruits for each k_slope
+recruits_per_k <- function(k_slopes, beta, c_all) {
+  output_r_p_k <- vector("numeric", length(k_slopes)) 
+    for(i in seq_along(k_slopes)) {
+      output_r_p_k[i] <- beta * (1 - (c_all / (alpha[i])))
+    }
+  output_r_p_k
+}
+
+# Use the parms$k_slope to add spawners_at_equilibrium
+r_eq_per_k <- recruits_per_k(parms$k_slope, beta, c_all)
+
+#Equilibrium Spawners corresponding to equilibrium recruits.  They are equivalent to R_e because LEP = 1.
+sp_for_r_eq <- function(beta, alpha, r_eq_per_k) {
+  output_sp_r_eq <- vector("numeric", length(r_eq_per_k)) 
+    for(i in seq_along(r_eq_per_k)) {
+      output_sp_r_eq[i] <- (r_eq_per_k[i] * beta) / (alpha[i] * (beta - r_eq_per_k[i]))
+    }
+  output_sp_r_eq
+}
+
+sp_eq <- sp_for_r_eq(beta, alpha, r_eq_per_k)
+```
+Calculate the spectral sensitivities for each combination of parameters, where spectra are normalized by the number of equilibrium spawners 
+```{r spec_norm}
+### 5. Use spec.pgram on the simulated number of spawners over time to calculate spectra ### is 
+j <- 1
+for (j in (1:nrow(parms))){ 
+	# Run each parameter combination case, generating population over time
+  stoch_df <-  as.data.frame(AgeStructMatrix_stoch_stability(s = 1, a = alpha[j], b = 350000, e = early_probs[j], l = late_probs[j], tf = tf, ncls = n_age[j], sig_r = sig_r)) #prior to 1/27/16, b= 0.00017 as in Worden et al. (2010) simulation_constant_spawncv[j]
+	names(stoch_df)[1] <- "Spawners"
+	# Set up a data frame for each case that makes room for all of the spectra
+  temp_df <- select(stoch_df, Spawners) %>% mutate(a_value = rep(alpha[j], dim(stoch_df)[1]), e_prob = rep(early_probs[j], dim(stoch_df)[1]), central_age = rep(c_age[j], dim(stoch_df)[1]), time = seq(1:dim(stoch_df)[1]))
+	spec_temp <- spec.pgram(temp_df$Spawners, spans = c(L,L), type = "l", plot = FALSE)
+	spec_df <- data.frame(frequency = spec_temp$freq, spectrum = spec_temp$spec)
+	spec_df_Seq <- spec_df %>% mutate(spectrum_norm = spectrum/sp_eq[j]) #keeps both frequency and normalized frequency
+	spec_df_Seq <- spec_df_Seq %>% mutate(central_age = rep(c_age[j], length(spec_temp$freq)), k = rep(k[j], length(spec_temp$freq)), frac_central_spawn = rep(c(1-2*early_probs[j]), length(spec_temp$freq)), CV_spawn = rep(cv_spawn[j], length(spec_temp$freq))) #a_value = rep(alpha[j], length(spec_temp$freq)
+if (j == 1) {
+spec_df_all_Seq <- spec_df_Seq
+j <- j + 1
+} else {
+spec_df_all_Seq <- bind_rows(spec_df_all_Seq, spec_df_Seq)
+j <- j + 1
+	}
+}
+
+newdata_Seq <- spec_df_all_Seq  
+
+# Change frequencies to be frequency * cen_age.  This will result in spectra overlapping for all the different central spawning ages.
+freq_norm_cen <- function(df){
+    df %>%  
+  mutate(frequency = frequency * central_age)
+} 
+  newdata_Seq2 <- freq_norm_cen(newdata_Seq) # newdata_Seq2 have the overlapping spectra.
+```
+Calculate the areas under the spectral density curves.
+```{r Calc_AUC}
+# Function for max spectral density normalized (could be used with data frame for standardized frequencies of 1.0).  This also finds the associated frequency.  To extract the frequency at max spectral density norm:  $frequency.  To extract max spectral density norm:  $spectrum_norm
+spec_plots <- function(df, cen_age, freq_min, freq_max){
+#1) Set up a df limited to the central spawn age and grouped by k and CV_slope 
+    cen_age <- enquo(cen_age)
+df2 <- df %>%
+    filter(., central_age == (!!cen_age)) %>% 
+    filter(frequency > freq_min & frequency < freq_max) %>%
+    group_by(., k) %>% 
+    group_by(., CV_spawn, add = TRUE) %>% 
+    nest(.)
+
+#2) Find AUC for cohort (high frequency) bump per central age, k, CV_spawn
+  # Find the cumulative sum of the spectrum_norm field around the cohort peak
+for(n in 1:nrow(df2)){
+        df2$data[[n]] <- df2$data[[n]] %>%
+        mutate(., cumsum = (cumsum(spectrum_norm * 0.0001))) %>%
+        mutate(., cumsum_age = cumsum / central_age) %>%
+        mutate(., auc = cumsum_age) 
+# Find the max frequency corresponding to the curve.  Ignore this for the cohort bumps, but use when determining the area under the entire curve
+        df2$data[[n]]$max_freq <- max(df2$data[[n]]$frequency)
+# Find the max AUC, which is the AUC 
+        df2$data[[n]]$auc_bump <- max(df2$data[[n]]$auc)
+  }
+return(df2)
+}
+
+calc_auc <- function(df, cen_age) {
+  auc_bump <- vector()
+for(n in 1:nrow(df)) {
+  auc_bump[n] <- unique(df$data[[n]]$auc_bump)
+} 
+  data_frame(central_age = cen_age, k = df$k, CV_spawn = df$CV_spawn, AUC = auc_bump)
+}
+
+# 3a) Set stage for calculating area under the cohort curve (AUC) by calculating the area under the entire curve
+all_2 <- spec_plots(newdata_Seq, 2, 0, 0.5) #df, cen_age, freq_min, freq_max
+all_2_auc <- calc_auc(all_2, 2)
+all_3 <- spec_plots(newdata_Seq, 3, 0, 0.5)
+all_3_auc <- calc_auc(all_3, 3)
+all_4 <- spec_plots(newdata_Seq, 4, 0, 0.5)
+all_4_auc <- calc_auc(all_4, 4)
+all_5 <- spec_plots(newdata_Seq, 5, 0, 0.5)
+all_5_auc <- calc_auc(all_5, 5)
+
+# Merge all of these total AUC data frames together
+merge_all_auc <- bind_rows(all_2_auc, all_3_auc, all_4_auc, all_5_auc)
+
+# 3b) Cumulative sum of spectral density normalized to equilibrium spawners divided by the number of frequency elements to get the area under the curve (AUC).  
+low_2_df  <- spec_plots(newdata_Seq, 2, 0, 0.1) #df, cen_age, freq_min, freq_max
+low_2_auc <- calc_auc(low_2_df, 2)
+
+low_3_df <- spec_plots(newdata_Seq, 3, 0, 0.1)
+low_3_auc <- calc_auc(low_3_df, 3)
+
+low_4_df <- spec_plots(newdata_Seq, 4, 0, 0.1)
+low_4_auc <- calc_auc(low_4_df, 4)
+
+low_5_df <- spec_plots(newdata_Seq, 5, 0, 0.1)
+low_5_auc <- calc_auc(low_5_df, 5)
+
+# Merge all of these low freq data frames together
+merge_low_auc <- bind_rows(low_2_auc, low_3_auc, low_4_auc, low_5_auc)
+
+# 3c) Now, for high_frequency AUC, subtract:  All AUC - low AUC
+AUC <- all_2_auc$AUC - low_2_auc$AUC
+high_2_auc <- low_2_auc %>% select(., -AUC) %>% bind_cols(., data.frame(AUC))
+
+AUC <- all_3_auc$AUC - low_3_auc$AUC
+high_3_auc <- low_3_auc %>% select(., -AUC) %>% bind_cols(., data.frame(AUC))
+
+AUC <- all_4_auc$AUC - low_4_auc$AUC
+high_4_auc <- low_4_auc %>% select(., -AUC) %>% bind_cols(., data.frame(AUC))
+
+AUC <- all_5_auc$AUC - low_5_auc$AUC
+high_5_auc <- low_5_auc %>% select(., -AUC) %>% bind_cols(., data.frame(AUC))
+
+merge_high_auc <- bind_rows(high_2_auc, high_3_auc, high_4_auc, high_5_auc)
+
+# rename AUC to AUC_total
+names(merge_all_auc)[4] <- c("AUC_total")
+
+# 3d) Merge the merge_all_auc with merge_high_auc, in order to calculate the proportion attributed to high frequencies > 0.1
+merge_high_prop <- left_join(merge_high_auc, merge_all_auc)
+merge_high_prop <- merge_high_prop %>% mutate(AUC_prop = AUC/AUC_total)
+
+merge_high_prop_2 <- merge_high_prop %>% filter(central_age == "2")
+merge_high_prop_2$k = factor(merge_high_prop_2$k)
+merge_high_prop_2$CV_spawn = factor(merge_high_prop_2$CV_spawn)
+
+merge_high_prop_3 <- merge_high_prop %>% filter(central_age == "3")
+merge_high_prop_3$k = factor(merge_high_prop_3$k)
+merge_high_prop_3$CV_spawn = factor(merge_high_prop_3$CV_spawn)
+
+merge_high_prop_4 <- merge_high_prop %>% filter(central_age == "4")
+merge_high_prop_4$k = factor(merge_high_prop_4$k)
+merge_high_prop_4$CV_spawn = factor(merge_high_prop_4$CV_spawn)
+
+merge_high_prop_5 <- merge_high_prop %>% filter(central_age == "5")
+merge_high_prop_5$k = factor(merge_high_prop_5$k)
+merge_high_prop_5$CV_spawn = factor(merge_high_prop_5$CV_spawn)
+
+# Merge all of these high frequency data frames together
+merge_all_high <- rbind(merge_high_prop_5, merge_high_prop_4, merge_high_prop_3, merge_high_prop_2)
+
+# 3e) Merge the merge_all_auc with merge_low_auc, in order to calculate the proportion attributed to low frequencies < 0.1
+merge_low_prop <- left_join(merge_low_auc, merge_all_auc)
+merge_low_prop <- merge_low_prop %>% mutate(AUC_prop = AUC/AUC_total)
+
+merge_low_prop_2 <- merge_low_prop %>% filter(central_age == "2")
+merge_low_prop_2$k = factor(merge_low_prop_2$k)
+merge_low_prop_2$CV_spawn = factor(merge_low_prop_2$CV_spawn)
+
+merge_low_prop_3 <- merge_low_prop %>% filter(central_age == "3")
+merge_low_prop_3$k = factor(merge_low_prop_3$k)
+merge_low_prop_3$CV_spawn = factor(merge_low_prop_3$CV_spawn)
+
+merge_low_prop_4 <- merge_low_prop %>% filter(central_age == "4")
+merge_low_prop_4$k = factor(merge_low_prop_4$k)
+merge_low_prop_4$CV_spawn = factor(merge_low_prop_4$CV_spawn)
+
+merge_low_prop_5 <- merge_low_prop %>% filter(central_age == "5")
+merge_low_prop_5$k = factor(merge_low_prop_5$k)
+merge_low_prop_5$CV_spawn = factor(merge_low_prop_5$CV_spawn)
+
+# Low frequency proportion for all central ages together
+merge_low_prop <- left_join(merge_low_auc, merge_all_auc)
+merge_low_prop <- merge_low_prop %>% mutate(AUC_prop = AUC/AUC_total)
+merge_low_prop$k = factor(merge_low_prop$k)
+merge_low_prop$CV_spawn = factor(merge_low_prop$CV_spawn)
+```
+
+Code for plots for proportion attributable to high frequencies > 0.1 
+```{r plots_high_prop}
+#Salmon_k_cv_highfreq_2_12Sep2018.pdf
+high_plot_2 <- ggplot(merge_high_prop_2, aes(CV_spawn, k, fill = AUC_prop, color = NULL)) + 
+  geom_bin2d()  + 
+  labs(x = "CV of spawning age distribution", title = "Variance due to high freq sensitivity for central age 2") +  
+  scale_fill_gradient(low="green", high="red") + 
+  scale_y_discrete(limits = levels(merge_high_prop_2$k)[c(1,11,21,31,41,51,61,71)]) + guides(fill=guide_legend(title="Proportion of AUC"))
+
+#Salmon_k_cv_highfreq_3_12Sep2018.pdf
+high_plot_3 <- ggplot(merge_high_prop_3, aes(CV_spawn, k, fill = AUC_prop, color = NULL)) + 
+  geom_bin2d()  + 
+  labs(x = "CV of spawning age distribution", title = "Variance due to high freq sensitivity for central age 3") +  
+  scale_fill_gradient(low="green", high="red") + 
+  scale_y_discrete(limits = levels(merge_high_prop_3$k)[c(1,11,21,31,41,51,61,71)]) + guides(fill=guide_legend(title="Proportion of AUC"))
+
+#Salmon_k_cv_highfreq_4_12Sep2018.pdf
+high_plot_4 <- ggplot(merge_high_prop_4, aes(CV_spawn, k, fill = AUC_prop, color = NULL)) + 
+  geom_bin2d()  + 
+  labs(x = "CV of spawning age distribution", title = "Variance due to high freq sensitivity for central age 4") +  
+  scale_fill_gradient(low="green", high="red") + 
+  scale_y_discrete(limits = levels(merge_high_prop_4$k)[c(1,11,21,31,41,51,61,71)]) + guides(fill=guide_legend(title="Proportion of AUC"))
+
+#Salmon_k_cv_highfreq_5_12Sep2018.pdf
+high_plot_5 <- ggplot(merge_high_prop_5, aes(CV_spawn, k, fill = AUC_prop, color = NULL)) + 
+  geom_bin2d()  + 
+  labs(x = "CV of spawning age distribution", title = "Variance due to high freq sensitivity for central age 5") +  
+  scale_fill_gradient(low="green", high="red") + 
+  scale_y_discrete(limits = levels(merge_high_prop_5$k)[c(1,11,21,31,41,51,61,71)]) + guides(fill=guide_legend(title="Proportion of AUC"))
+```
+
+Code for plots for proportion attributable to low frequencies < 0.1 
+```{r plots_high_prop}
+#Salmon_k_cv_lowfreq_2_12Sep2018.pdf
+low_plot_2 <- ggplot(merge_low_prop_2, aes(CV_spawn, k, fill = AUC_prop, color = NULL)) + 
+  geom_bin2d()  + 
+  labs(x = "CV of spawning age distribution", title = "Variance due to low freq sensitivity for central age 2") +  
+  scale_fill_gradient(low="green", high="red") + 
+  scale_y_discrete(limits = levels(merge_low_prop_2$k)[c(1,11,21,31,41,51,61,71)]) + guides(fill=guide_legend(title="Proportion of AUC"))
+
+#Salmon_k_cv_lowfreq_3_12Sep2018.pdf
+low_plot_3 <- ggplot(merge_low_prop_3, aes(CV_spawn, k, fill = AUC_prop, color = NULL)) + 
+  geom_bin2d()  + 
+  labs(x = "CV of spawning age distribution", title = "Variance due to low freq sensitivity for central age 3") +  
+  scale_fill_gradient(low="green", high="red") + 
+  scale_y_discrete(limits = levels(merge_low_prop_3$k)[c(1,11,21,31,41,51,61,71)]) + guides(fill=guide_legend(title="Proportion of AUC"))
+
+#Salmon_k_cv_lowfreq_4_12Sep2018.pdf
+low_plot_4 <- ggplot(merge_low_prop_4, aes(CV_spawn, k, fill = AUC_prop, color = NULL)) + 
+  geom_bin2d()  + 
+  labs(x = "CV of spawning age distribution", title = "Variance due to low freq sensitivity for central age 4") +  
+  scale_fill_gradient(low="green", high="red") + 
+  scale_y_discrete(limits = levels(merge_low_prop_4$k)[c(1,11,21,31,41,51,61,71)]) + guides(fill=guide_legend(title="Proportion of AUC"))
+
+#Salmon_k_cv_lowfreq_5_12Sep2018.pdf
+low_plot_5 <- ggplot(merge_low_prop_5, aes(CV_spawn, k, fill = AUC_prop, color = NULL)) + 
+  geom_bin2d()  + 
+  labs(x = "CV of spawning age distribution", title = "Variance due to low freq sensitivity for central age 5") +  
+  scale_fill_gradient(low="green", high="red") + 
+  scale_y_discrete(limits = levels(merge_low_prop_5$k)[c(1,11,21,31,41,51,61,71)]) + guides(fill=guide_legend(title="Proportion of AUC"))
+```

@@ -19,7 +19,7 @@ library(ggrepel)
 library(devtools)
 library(broom)
 
-F.halfmax = seq(from=0,to=1.0,by=0.1) #for now, F ranges from 0 to 1
+F.halfmax = seq(from=0,to=3.0,by=0.01) #for now, F ranges from 0 to 1
 F.halfmax = 0
 tknot =0 #used in vonB eq. which is in calculate_LSB_at_age_by_F() function
 
@@ -72,6 +72,7 @@ LEPinfo <- as.data.frame(LEPinfo)
 names(LEPinfo) <- c("unfishedLEP","LEP35","oneoverLEP","oneoverLEP35")
 LEPinfo <- cbind(codNames,LEPinfo)
 
+alphas <- LEPinfo$oneoverLEP35
 # one plot for each pop, plotting both oneoverLEP and oneoverLEP35
 par(mfrow=c(4,4))
 for(i in 1:length(codNames)){
