@@ -1,5 +1,5 @@
 # Celtic Sea
-name = "celticsea" 
+name = "Celtic Sea" 
 L_inf = 99
 K = 0.39
 B0 = -5.22

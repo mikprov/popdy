@@ -1,5 +1,5 @@
 # North Sea
-name = "northsea" 
+name = "North Sea" 
 L_inf = 126
 K = 0.217
 B0 = -6.42

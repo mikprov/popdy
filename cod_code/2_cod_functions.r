@@ -14,7 +14,7 @@ library(faraway)
 
 tknot = 0
 assemble_Leslie <- function(B0,B1,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
- 
+                            
   Age=1:maxage
   
   #data = subset(data,Yearclass>1959)  #yearclasses vary among stocks
@@ -37,35 +37,36 @@ assemble_Leslie <- function(B0,B1,maxage,K,L_inf,TEMP,F.halfmax,tknot) {
   # -- assemble NEAR df: use NEAR to calculate Leslie matrix
   NEAR = data.frame(cbind(Age,mat1,growth))  #life table: maturity & size at age
   NEAR$Vul1 = mat1 #insert selectivity at age, use maturity ogive for selectivity
-  NEAR$M_G= 0.19+0.058*TEMP #insert mortality at age, from regression fit of Fig. 5c, 
-  # loaded in parms set. Predicted natural mortality rates from the regression of 
-  # temperature effect on M_G. 
-  
-  
-  A = matrix(0,length(Age),length(Age)) #empty Leslie matrix
+  #NEAR$M_G= 0.19+0.058*TEMP #insert mortality at age, from regression fit of Fig. 5c, 
+ 
+  # ** CHOOSE EITHER PAULY OR GIASLON ** #
+  NEAR$M = rep(MG,length=length(NEAR[,1]))
+  #NEAR$M = rep(Mp,length=length(NEAR[,1]))
+
+  A = matrix(0,length(Age),length(Age)) #empty Leslie matrix - Giaslon
   
   # -- for each age, get F and survival
   for(j in 1:length(Age)){ # step through ages
     NEAR$FISH[j] = NEAR$Vul1[j]*F.halfmax	# Vul1 should be selectivity, but we are using mat (maturity)
-    NEAR$SURV = exp(-(NEAR$FISH+NEAR$M_G)) #SURV is the fraction surviving at each age
+    NEAR$SURV = exp(-(NEAR$FISH+NEAR$M)) #SURV is the fraction surviving at each age
     
-    #NEAR$Survship = 0 # set up column for survivorship (amount or fraction present at age)
-    #NEAR$Survship[1] = 1
+    NEAR$Survship = 0 # set up column for survivorship (amount or fraction present at age)
+    NEAR$Survship[1] = 1
     
-    #for(k in 1:(nrow(NEAR)-1)){ # step through ages to calc survivorship
-    #  NEAR$Survship[k+1] = NEAR$Survship[k]*NEAR$SURV[k] #amount present at age
-   # }
+    for(k in 1:(nrow(NEAR)-1)){ # step through ages to calc survivorship using MG
+      NEAR$Survship[k+1] = NEAR$Survship[k]*NEAR$SURV[k] #amount present at age
+    }
+    
   }
-  
+  NEAR$egg_production <- NEAR$growth*NEAR$mat1*NEAR$Survship
   
   A[1,] = NEAR$mat1*NEAR$growth# insert fecundity (maturity * weight) in top row
   # ----------------------------------------------------------------------- #
-  
-  for(u in 2:length(Age)-1){ # insert survival into A on subdiagonal
-    A[u+1,u]=NEAR$SURV[u]
+  for(u in 2:length(Age)-1){ # insert survival on subdiagonal
+    A[u+1,u]=NEAR$SURV[u]  
   }
-  return(list(A=A, NEAR=NEAR))
-  #return(NEAR=NEAR) # returns Leslie matrix
+  return(list(A=A,NEAR=NEAR))
+  
 } # closes assemble_Leslie matrix function
 
 
@@ -138,29 +139,40 @@ calculate_LSB_at_age_by_F <- function(B0,B1,maxage,L_inf,K,TEMP,F.halfmax){
   # -- assemble NEAR df: use NEAR to calculate LSB
   NEAR = data.frame(cbind(Age,mat1,growth))  #cols: age, prop maturity at age, growth (wt at age)
   NEAR$Vul1 = mat1 #use maturity ogive for selectivity ogive -- see Wang et al for justification
-  NEAR$M_G= 0.19+0.058*TEMP   #mortality at age, regression fit of Fig. 5c, 'TEMP' is loaded in parms set
+  #NEAR$M_G= 0.19+0.058*TEMP   #mortality at age, regression fit of Fig. 5c, 'TEMP' is loaded in parms set
+  NEAR$MG = rep(MG,length=length(NEAR[,1]))
+  NEAR$MP = rep(Mp,length=length(NEAR[,1]))
   
   # -- LEPdf: rows ~ age, col ~ fishing levels (F.halfmax), observations is egg production at age
-  LEPdf = matrix(0,nrow=length(Age),ncol=length(F.halfmax))
+  LEPdf_MG = matrix(0,nrow=length(Age),ncol=length(F.halfmax))
+  LEPdf_MP = matrix(0,nrow=length(Age),ncol=length(F.halfmax))
+  
   for(g in 1:length(F.halfmax)){ # step through each fishing level, for the first column in LEPdf
    fishing_at_age = NEAR$Vul1*F.halfmax[g]	# Vul1 should be selectivity, but it's mat. F=selectivity*F rate
-   NEAR$SURV_at_age = exp(-(fishing_at_age+NEAR$M_G)) #SURV is the fraction surviving at each age
+   NEAR$SURV_MG = exp(-(fishing_at_age+NEAR$MG)) #SURV is the fraction surviving at each age
+   NEAR$SURV_MP = exp(-(fishing_at_age+NEAR$MP)) #SURV is the fraction surviving at each age
    #l_suba <- rep(NA,length=length(Age)) #create empty vector to store l_suba
    
    #for(j in 1:length(Age)){ #for each age
    #    l_suba[j] = surv_at_age[j]^(j-1) } #l_suba = survival^a starting at 0
-   NEAR$Survship = 0 # set up column for survivorship (amount or fraction present at age)
-   NEAR$Survship[1] = 1
-   
+   NEAR$SurvshipMG = 0 # set up column for survivorship (amount or fraction present at age)
+   NEAR$SurvshipMG[1] = 1
    for(k in 1:(nrow(NEAR)-1)){ # step through ages to calc survivorship
-     NEAR$Survship[k+1] = NEAR$Survship[k]*NEAR$SURV_at_age[k] #amount present at age
+     NEAR$SurvshipMG[k+1] = NEAR$SurvshipMG[k]*NEAR$SURV_MG[k] #amount present at age
+   }
+   
+   NEAR$SurvshipMP = 0 # set up column for survivorship (amount or fraction present at age)
+   NEAR$SurvshipMP[1] = 1
+   for(k in 1:(nrow(NEAR)-1)){ # step through ages to calc survivorship
+     NEAR$SurvshipMP[k+1] = NEAR$SurvshipMP[k]*NEAR$SURV_MP[k] #amount present at age
    }
       
-   LEPdf[,g] = NEAR$mat1*NEAR$growth*NEAR$Survship #prop mat at age * wt at age * survival from age 0 to age a
+   LEPdf_MG[,g] = NEAR$mat1*NEAR$growth*NEAR$SurvshipMG #prop mat at age * wt at age * survival from age 0 to age a
+   LEPdf_MP[,g] = NEAR$mat1*NEAR$growth*NEAR$SurvshipMP #prop mat at age * wt at age * survival from age 0 to age a
     
   } # closes fishing level loop
   
-  return(LEPdf)
+  return(list(LEP_MG=LEPdf_MG, LEP_MP=LEPdf_MP))
 } # closes function to calculate LSB
 
 

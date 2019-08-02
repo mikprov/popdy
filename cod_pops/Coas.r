@@ -1,5 +1,5 @@
 # Coastal Norway
-name = "coastalnorway" 
+name = "Coastal Norway" 
 L_inf = 123
 K = 0.110
 B0 = -5.87

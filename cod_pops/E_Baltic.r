@@ -1,5 +1,5 @@
 # East Baltic
-name = "eastbaltic" 
+name = "E Baltic Sea" 
 L_inf = NA
 K = NA
 B0 = -4.12

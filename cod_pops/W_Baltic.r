@@ -1,5 +1,5 @@
 # West Baltic
-name = "westbaltic" 
+name = "W Baltic Sea" 
 L_inf = 103
 K = 0.150
 B0 = -2.52

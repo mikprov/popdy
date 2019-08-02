@@ -1,5 +1,5 @@
 # Kattegat
-name = "kattegat" 
+name = "Kattegat" 
 L_inf = 105
 K = 0.130
 B0 = -5.01

@@ -13,30 +13,48 @@ library(lattice)
 library(tidyverse)
 #install.packages("stargazer")
 library(stargazer)
+library(RColorBrewer)
 
 # ---
 # load the simulation model
 source("C:/Users/provo/Documents/GitHub/popdy/cod_code/simulation_model_cod_v3.r")
 
-# load functions
+# load functions --> ***** CHECK for MG or MP *****
 source("C:/Users/provo/Documents/GitHub/popdy/cod_code/2_cod_functions.r")
 
 # load peak spawning age info
-eigentable = read.csv("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable.csv",
+eigentable = read.csv("C:/Users/provo/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable_MM.csv",
                       header=TRUE,stringsAsFactors = FALSE)
 eigentable = as.data.frame(eigentable)
 
-# load cod data, break into separate populations
-#source("C:/Users/provo/Documents/GitHub/popdy/cod_code/0_load_cod_data.r")
-# I don't think I need the actual data since I'm pulling maturity 
-# information from Wang et al. 
-#codNames <- c("Northsea","Coas","W_Baltic",
-#              "Faroe","NE_Arctic","Celtic",
-#              "Iceland","Kat","W_Scotland",
-#              "NGulf","GB","GM",
-#              "cod3NO","cod3M","cod2J3KL",
-#              "cod3Ps")
+# *******************
+# depending on which M parm, run the right code
+# *******************
+# MG
+eigentable$codNames <- factor(eigentable$codNames,levels=eigentable[order(eigentable$mode_ageMG,eigentable$temp),]$codNames)
+eigentable$codNames_plot <- factor(eigentable$codNames_plot,levels=eigentable[order(eigentable$mode_ageMG,eigentable$temp),]$codNames_plot)
+eigentable <- eigentable %>% select(-mode_ageMP,-sd_modeMP,-cvs_modeMP) %>% rename(mode_age=mode_ageMG,sd_mode=sd_modeMG,cvs_mode=cvs_modeMG)
+# MP
+#eigentable$codNames <- factor(eigentable$codNames,levels=eigentable[order(eigentable$mode_ageMP,eigentable$temp),]$codNames)
+#eigentable$codNames_plot <- factor(eigentable$codNames_plot,levels=eigentable[order(eigentable$mode_ageMP,eigentable$temp),]$codNames_plot)
+#eigentable <- eigentable %>% select(-mode_ageMG,-sd_modeMG,-cvs_modeMG) %>% rename(mode_age=mode_ageMP,sd_mode=sd_modeMP,cvs_mode=cvs_modeMP)
+# *******************
+
+
+# make all LEPs equal
+conLEP = 1.1
+# adjust fecundities by this much
+adjFec = round(1/conLEP,digits=1)
+
+#selectedkvals <- round(1/selectedalphas,digits=2)
+selectedkvals <- c(0.15,0.4,0.6,0.85)
+selectedalphas <- round(1/(selectedkvals*conLEP^2),digits=2)
+kvals = round(seq(from=0.1,to=1,by=0.01),digits=2)
+
+# setting up for later
 codNames <- eigentable$codNames
+codNames_ordered_by_peak <- levels(eigentable$codNames)
+codNames_ordered_by_peak_plot <- levels(eigentable$codNames_plot)
 
 # *************************************** #
 # (Fig 1:distributions) spawning distributions for all pops
@@ -46,55 +64,112 @@ codNames <- eigentable$codNames
 # *************************************** #
 # (Fig 4:eigenvalue) Generate Leslie matricies for diff F values (create Leslie arrays)
 # *************************************** #
-kvals = seq(from=0.1,to=1,by=0.1) #Check max F value (some pops can withstand high F)
-Aarray = as.list(rep(NA,length(codNames))) #Leslie matrix storage for each F value for pop i
+Aarray = as.list(rep(NA,length(codNames))) #Leslie matrix storage for each k value for pop i
 names(Aarray) <- codNames
+LeslieoutNEARL <- as.list(rep(NA,length=length(codNames)))
+names(LeslieoutNEARL) <- codNames
+# store eigenvalues here
 eigenvals1 = matrix(NA,nrow=length(kvals),ncol=length(codNames)) 
 eigenvals2 = matrix(NA,nrow=length(kvals),ncol=length(codNames))
 eigenvals12 = matrix(NA,nrow=length(kvals),ncol=length(codNames))
+# store max fecundities
+maxfecunds = matrix(NA,nrow=length(kvals),ncol=length(codNames))
+# store LEP values
+LEPvals = matrix(NA,nrow=length(kvals),ncol=length(codNames))
+# store top row sums
+toprowsums = matrix(NA,nrow=length(kvals),ncol=length(codNames))
+# store new LEP with adjusted fecundities (divide by half of original LEP)
+newLEPs = matrix(NA,nrow=length(kvals),ncol=length(codNames))
+
 
 for (i in 1:length(codNames)){ #for each pop i
   # load parms for cod pop i: L_inf, K (for vonB), TEMP, maxage,B0,B1 (matur)
   source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',codNames[i], '.r', sep=''))
   
-  Lesliearray <- array(NA,c(maxage,maxage,length(kvals))) #store Leslie matricies
+  Lesliearray <- array(NA,c(maxage,maxage,length(kvals))) #store Leslie matricies for simulations
+  #Leslie_eigens <- array(NA,c(maxage,maxage,length(kvals))) #store Leslie matricies for eigen analysis
   e1 = rep(NA,length=length(kvals)) #store lambda1
   e2 = rep(NA,length=length(kvals)) #store lambda2
   e12 = rep(NA,length=length(kvals)) #store inverse damping ratio
+  maxfec = rep(NA,length=length(kvals)) #store max fec values
+  LEPs = rep(NA,length=length(kvals))
+  toprowsum = rep(NA,length=length(kvals))
+  newLEP = rep(NA,length=length(kvals)) #recalculte LEP with adjusted fs
   
-  for (k in 1:length(kvals)){ #step through F values 
+  for (k in 1:length(kvals)){ #step through k values 
     # create Leslie matrix:
     Leslieout = assemble_Leslie(maxage=maxage, K=K, L_inf=L_inf, TEMP=TEMP,
                                 F.halfmax=0, B0=B0, B1=B1, tknot=0)
-    # move survivals along subdiagonal to fecundities
-    Leslieout$A[1,] <- Leslieout$A[1,]*Leslieout$A[2,1]
-      #I can do it this way bc survival is constant w/age (ie no fishing)
+    Jacobian.sim <- Leslieout$A
+    Jacobian.eig <- Leslieout$A
     
-    # set suvivals on subdiagonal = 1 (only works if no fishing)
-    Leslieout$A[Leslieout$A == Leslieout$A[2,1]] <- 1
+    # max fecundity values
+    maxfec[k] <- max(Leslieout$A[1,])
     
-    # transform fecundity-at-age to probability density curve & multiply by k (slope)
-    Leslieout$A[1,] <- (Leslieout$A[1,]/sum(Leslieout$A[1,]))*kvals[k]
+    # LEP for this popualtion with the two mortality estimates
+    LEP = sum(Leslieout$NEAR[["egg_production"]])
+    LEPs[k] = LEP
     
-    #NEAR$Survship = 0 # set up column for survivorship (amount or fraction present at age)
-    #NEAR$Survship[1] = 1
+    # re-calculate LEP with new adjusted fecundities before k is incorporated
+    newfs <- Leslieout$A[1,]/(LEP*adjFec)
+    term <- rep(NA,length=maxage)
+    for(a in 1:maxage){term[a] <- newfs[a]*Leslieout$NEAR$Survship[a]}
+    newLEP[k] <- sum(term) #if you plot 'term', it's the spawning distribution over age
     
-    #for(k in 1:(nrow(NEAR)-1)){ # step through ages to calc survivorship
-    #  NEAR$Survship[k+1] = NEAR$Survship[k]*NEAR$SURV_at_age[k] #amount present at age
-    #}
+    #[OLD WAY] Matrix for simulations analysis: adjust fecundities by multiplying 15/(current LEP) 
+    #Leslieout$A[1,] <- Leslieout$A[1,]*(15/LEP)*kvals[k]
+    #Lesliearray[,,k] = Leslieout$A 
     
-    Lesliearray[,,k] = Leslieout$A #3D array of Leslie matricies
-    e1[k] = extract_first_eigen_value(Leslieout$A)
-    e2[k] = extract_second_eigen_value(Leslieout$A)
+    # Matrix for simulations analysis: adjust fecundities by multiplying dividing by 1/2 of LEP 
+    Jacobian.sim[1,] <- (Jacobian.sim[1,]/(LEP*adjFec))*kvals[k]
+    Lesliearray[,,k] = Jacobian.sim
+    
+    # Matrix for eigenvalue analysis: relative fecundities at age
+    Leslie_eigens <- Jacobian.eig
+    #Leslie_eigens[1,] <- Leslie_eigens[1,]*kvals[k] # f*k
+    #Leslie_eigens[1,] <- (Leslie_eigens[1,]/sum(Leslie_eigens[1,]))*kvals[k] # rel-f*k
+    #Leslie_eigens[1,] <- Leslie_eigens[1,]*(1/LEP)*kvals[k] # f*(1/LEP)*k
+    #Leslie_eigens[1,] <- (Leslie_eigens[1,])*(15/LEP)*kvals[k] # f*(15/LEP)*k
+    #Leslie_eigens[1,] <- (Leslie_eigens[1,])*(30/LEP)*kvals[k] # f*(15/LEP)*k
+    
+    ## move survivals to top row, set sub-diag=1
+    #Leslie_eigens[1,] <- Leslie_eigens[1,]*Leslie_eigens[2,1]
+    #Leslie_eigens[Leslie_eigens == Leslie_eigens[2,1]] <- 1 # suvivals on subdiagonal = 1 (only works if no fishing)
+    #Leslie_eigens[1,] <- Leslie_eigens[1,]/sum(Leslie_eigens[1,])*kvals[k]
+    #Lesliearray[,,k] = Leslie_eigens
+    Leslie_eigens[1,] <- (Leslie_eigens[1,]/(LEP*adjFec))*kvals[k]
+    #Leslie_eigens[1,] <- (Leslie_eigens[1,])*kvals[k]
+    
+    toprowsum[k] <- sum(Leslie_eigens[1,])
+    
+    # Eigenvalues of matrix with real eigenvalues
+    e1[k] = extract_first_eigen_value(Leslie_eigens)
+    e2[k] = extract_second_eigen_value(Leslie_eigens)
     e12[k] = e2[k] / e1[k]
     }
-    
+  # store max fec values
+  maxfecunds[,i] <- maxfec
+  LEPvals[,i] <- LEPs
+  toprowsums[,i] <- toprowsum
+  newLEPs[,i] <- newLEP # newLEPs should be a matrix of all 2s
+  # store Leslie matrices
   Aarray[[i]]= Lesliearray #store Leslie 3D array in list of all pops
+  NEARsave <- Leslieout$NEAR #save NEAR df
+  NEARsave$codNames <- rep(codNames[i],length=length(NEARsave[,1]))
+  LeslieoutNEARL[[i]] <- NEARsave
+  # store eigenvalues 
   eigenvals1[,i] = e1 #store lambda1 
   eigenvals2[,i] = e2 #store lambda2
   eigenvals12[,i] = e12 #store inverse of damping ratio
+  rm(L_inf,K,MG,Mp,theta0,theta1,TEMP,A50,S50,
+     maxage,Leslieout,Leslie_eigens,name,NEARsave,
+     a,term,maxfec,LEPs,newLEP)
+  print(i)
 }
-rm(e1,e2,e12,i,k,Lesliearray) #clean up
+rm(e1,e2,e12,i,k,H) #clean up
+
+#format list of NEAR dfs in LeslieoutNEAR
+NEAR <- bind_rows(LeslieoutNEARL,id=NULL)
 
 #format dfs, add kvals
 eigenvals1 <- as.data.frame(eigenvals1)
@@ -107,35 +182,45 @@ e1long <- eigenvals1 %>% mutate(kvals=kvals) %>% gather("codNames","value",1:16)
 e2long <- eigenvals2 %>% mutate(kvals=kvals) %>% gather("codNames","value",1:16) %>% mutate(eigen="e2")
 e12long <- eigenvals12 %>% mutate(kvals=kvals) %>% gather("codNames","value",1:16) %>% mutate(eigen="e12")
 eigendata <- rbind(e1long,e2long,e12long)
-eigendata$peak <- eigentable[match(eigendata$codNames,eigentable$codNames),"mode_age"]
 
+# fill in peak, max, sd, cvs in eigendata
+eigendata$maxage <- eigentable[match(eigendata$codNames,eigentable$codNames),"max_ages"]
+eigendata$peak <- eigentable[match(eigendata$codNames,eigentable$codNames),"mode_age"]
+eigendata$cvs <- eigentable[match(eigendata$codNames,eigentable$codNames),"cvs_mode"]
+eigendata$sd <- eigentable[match(eigendata$codNames,eigentable$codNames),"sd_mode"]
+head(eigendata)
+
+#use the code below to add 
+# Need to adjust the code below needs to edited for MG and MP
 # (1) test significance of relationship between peak age & e1 
 # (1a) within each k value: 
-m.e1 <- as.list(rep(NA,length=length(kvals)))
-for(n in 1:length(kvals)){
-  dd <- eigendata[eigendata$kvals == kvals[n] & eigendata$eigen == "e1",]
+m.e1 <- as.list(rep(NA,length=length(selectedkvals)))
+for(n in 1:length(selectedkvals)){
+  dd <- eigendata[eigendata$kvals == selectedkvals[n] & eigendata$eigen == "e1",]
   m.e1[[n]] <- lm(dd$value ~ dd$peak)
 }
 rm(n,dd)
-e1_vs_peak_withinkval <- stargazer(m.e1[[1]],m.e1[[4]],m.e1[[6]],m.e1[[9]],dep.var.labels = c("lambda1"),
+
+e1_vs_peak_withinkval <- stargazer(m.e1[[1]],m.e1[[2]],m.e1[[3]],m.e1[[4]],m.e1[[5]],dep.var.labels = c("lambda1"),
                                title="Regression Results for e1~peak within kvals",
                                covariate.labels=c("peak age"),type="text", report='vc*p',
-                               column.labels = c("k=0.1","k=0.4","k=0.6","k=0.9"),
+                               column.labels = c("k=0.1","k=0.3","k=0.5","k=0.71","k=0.91"),
                                out="C:/Users/provo/Documents/GitHub/popdy/cod_figures/model_e1vspeak_withink.txt")
 # (1b) across k values --> average within k, for each pop
 # (1b1) average within k
 meanatk_e1 <- rep(NA,length=length(kvals))
 for(n in 1:length(kvals)){
   meanatk_e1[n] <- mean(eigendata[eigendata$kvals == kvals[n] & eigendata$eigen == "e1",]$value)}
-e1_vs_peak_acrossk <- lm(meanatk_e1~kvals)
+e1_vs_peak_acrossk <- summary(lm(meanatk_e1~kvals))
 
 # (2) test significance of relationship between peak age & e12
-m.e12 <- as.list(rep(NA,length=length(kvals)))
-for(n in 1:length(kvals)){
-  dd <- eigendata[eigendata$kvals == kvals[n] & eigendata$eigen == "e12",]
-  m.e12[[n]] <- summary(lm(dd$value ~ dd$peak))
+m.e12 <- as.list(rep(NA,length=length(selectedkvals)))
+for(n in 1:length(selectedkvals)){
+  dd <- eigendata[eigendata$kvals == selectedkvals[n] & eigendata$eigen == "e12",]
+  m.e12[[n]] <- lm(dd$value ~ dd$peak)
 }
-e12_vs_peak_withinkval <- stargazer(m.e12[[1]],m.e12[[4]],m.e12[[6]],m.e12[[9]],dep.var.labels = c("damping ratio"),
+e12_vs_peak_withinkval <- stargazer(m.e12[[1]],m.e12[[2]],m.e12[[3]],m.e12[[4]],m.e12[[5]],
+                                    dep.var.labels = c("damping ratio"),
                                    title="Regression Results for e12~peak within kvals",
                                    covariate.labels=c("peak age"),type="text", report='vc*p',
                                    column.labels = c("k=0.1","k=0.4","k=0.6","k=0.9"),
@@ -148,15 +233,17 @@ e12_vs_peak_acrossk <- summary(lm(meanatk_e12~kvals))
 
 
 # *************************************** #
-# (Fig 4) Eigenvalue 4 panel plot
+# (Fig 4) Eigenvalue 4 panel plot AND Gantt plot
 # *************************************** #
 
-lambda1 <- ggplot(eigendata[eigendata$eigen=="e1" & eigendata$kvals %in% c(0.1,0.4,0.6,0.9),],aes(x=peak,y=value)) +
+lambda1 <- ggplot(eigendata[eigendata$eigen=="e1" & eigendata$kvals %in% selectedkvals,],
+                  aes(x=cvs,y=value)) +
   geom_point() + 
   geom_smooth(method="lm",se=FALSE,color="black") +
   facet_grid(. ~ kvals) +
-  scale_y_continuous(limits=c(0,1.1)) +
-  geom_text_repel(data=eigendata[eigendata$eigen=="e1"& eigendata$kvals %in% c(0.1,0.4,0.6,0.9),],
+  #scale_y_continuous(limits=c(0,1)) +
+  scale_y_continuous() +
+  geom_text_repel(data=eigendata[eigendata$eigen=="e1"& eigendata$kvals %in% selectedkvals,],
                   aes(label = codNames),
                   segment.color = "grey",
                   size = 2,
@@ -166,16 +253,16 @@ lambda1 <- ggplot(eigendata[eigendata$eigen=="e1" & eigendata$kvals %in% c(0.1,0
         axis.line = element_line(colour = "black"),
         axis.title.y = element_text(angle = 0)) +
   ylab("a") +
-  xlab("Peak spawning age") +
-  #ylab(expression(paste(lambda[1]))) +
-  ylim(0.5,1.01)
+  xlab("CV of spawning biomass distribution") +
+  ylab(expression(paste(lambda[1]))) 
 
-lambda12 <- ggplot(eigendata[eigendata$eigen=="e12" & eigendata$kvals %in% c(0.1,0.4,0.6,0.9),],aes(x=peak,y=value)) +
+lambda12 <- ggplot(eigendata[eigendata$eigen=="e12" & eigendata$kvals %in% selectedkvals,],
+                   aes(x=cvs,y=value)) +
   geom_point() + 
   geom_smooth(method="lm",se=FALSE,color="black") +
   facet_grid(. ~ kvals) +
-  scale_y_continuous(limits=c(0,1.1)) +
-  geom_text_repel(data=eigendata[eigendata$eigen=="e12"& eigendata$kvals %in% c(0.1,0.4,0.6,0.9),],
+  scale_y_continuous(limits=c(0,1)) +
+  geom_text_repel(data=eigendata[eigendata$eigen=="e12"& eigendata$kvals %in% selectedkvals,],
                   aes(label = codNames),
                   segment.color = "grey",
                   size = 2,
@@ -185,16 +272,18 @@ lambda12 <- ggplot(eigendata[eigendata$eigen=="e12" & eigendata$kvals %in% c(0.1
         axis.line = element_line(colour = "black"),
         axis.title.y = element_text(angle = 0)) +
   ylab("b") +
-  xlab("Peak spawning age") +
-  #ylab(expression(paste(abs(lambda[2])/lambda[1]))) +
-  ylim(0.5,1.01)
+  xlab("CV of spawning biomass distribution") +
+  ylab(expression(paste(abs(lambda[2])/lambda[1]))) 
+
 p <- list(lambda1,lambda12)
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig4_2xpanelplot.tiff', units="in", width=5, height=7, res=300)
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript3/fig4_ab_adjustLEP_CV.tiff', units="in", width=5, height=7, res=300)
 do.call(grid.arrange,c(p,ncol=1))
 dev.off()
-rm(p)
+rm(p,lambda1,lambda12)
+
+
 # *************************************** #
-# (Fig 2:schematic) Choose alpha values, plot BH curves
+# (Fig 1:schematic) Choose alpha values, plot BH curves
 # *************************************** #
 # In my analysis I want to evaluate population spectra when
 # populations sit on different slopes of the BH curve. 
@@ -206,35 +295,36 @@ rm(p)
 
 # For each alpha value, plot the BH curve and the 1:1 line
 BH <- function(alpha,beta,E){ E/((1/alpha)+(E/beta))}
-#betasH <- seq(from=10^5,to=10^7,by=((10^7)-(10^5))/4)
-#betas <- seq(from=10^3,to=10^5,by=((10^5)-(10^3))/6)
 
-#a = c(1.2,2,5,10) #alpha values
-a = seq(from=1.1, to=10, by=0.1)
+a = seq(from=0.97,to=10,by=0.01) #alpha values
+a = c(5.51,2.07,1.38,0.97)
 b = 1000 # beta
 ee <- seq(from=0,to=b,by=b/10000) #range of egg values
 
-Rlist <- as.list(rep(NA,length=length(a))) #recruit values for each alpha
+#Calculate recruit values for each alpha
+Rlist <- as.list(rep(NA,length=length(a))) 
 names(Rlist) <- a
 for(i in 1:length(a)){ Rlist[[i]] <- BH(alpha=a[i],beta=b,E=ee) }
 RvE <- as.data.frame(do.call(cbind,Rlist))
 RvE$eggs <- ee
 RvElong <- RvE %>% gather(alpha,value,1:length(a))
+RvElong$alpha <- as.numeric(RvElong$alpha)
 
 # For each alpha, calculate the intersection with the 1:1 line. Find when R=E
 eq <- rep(NA,length=length(a))
 interpt <- rep(NA,length=length(a))
 slopes <- rep(NA,length=length(a))
 for(i in 1:length(a)){
-  ee <- seq(from=0,to=b,by=b/10000)
-  rr <- BH(alpha=a[i],beta=b,E=ee)
-  dat <- as.data.frame(cbind(ee,rr))
-  names(dat) <- c('eggs','recruits')
-  dat$diff <- abs(dat$eggs - dat$recruits) #diff between R and E
+  ee <- seq(from=0,to=b,by=b/10000) #all possible egg values
+  rr <- BH(alpha=a[i],beta=b,E=ee) #calc recruit values using BH
+  rr.lep <- 0+round(1/conLEP,digits=2)*ee #calc recruit values using 1/LEP
+  dat <- as.data.frame(cbind(ee,rr,rr.lep))
+  names(dat) <- c('eggs','recruits','recruits.lep')
+  dat$diff <- abs(dat$recruits - dat$recruits.lep) #diff between rr and rr.lep
   dat <- dat[-1,] #remove first row at origin
   row.names(dat) <- NULL
   #head(dat)
-  #plot(dat$diff,type="l")
+  #plot(dat$diff[1:1000],type="l")
   eq[i] <- which.min(dat$diff )
   interpt[i] <- dat[eq[i],]$eggs
   #dat[(eqpoint[b]-3):(eqpoint[b]+3),]
@@ -243,37 +333,41 @@ for(i in 1:length(a)){
   y1 <- dat[(eq[i]-1),]$recruits
   x2 <- dat[(eq[i]+1),]$eggs
   y2 <- dat[(eq[i]+1),]$recruits
-  slopes[i] <- (y2-y1)/(x2-x1)
+  slopes[i] <- round((y2-y1)/(x2-x1),digits=2)
+  print(i)
 }
 datalpha <- as.data.frame(cbind(a,interpt,slopes))
-datalpha$slopesR <- round(datalpha$slopes,digits=3)
-#datalpha[1:20,]
 plot(x=datalpha$a,y=datalpha$slopesR)
 
-plot_these_alpha <- datalpha[datalpha$a %in% c(1.1,2.5,5,10),]
+#plot_these_alpha <- datalpha %>% filter(a %in% c(1.1,"1.4",2.0,"3.3",10.0)) #weird work around :(
+plot_these_alpha <- datalpha %>% filter(a %in% c("5.51","2.07","1.38","0.97")) #weird work around :(
 
-RvElong_forplotting <- RvElong[RvElong$alpha %in% plot_these_alpha$a,]
-# add column with intercept point for each alpha
+RvElong_forplotting <- RvElong[RvElong$alpha %in% c("5.51","2.07","1.38","0.97"),]
 RvElong_forplotting$interpt <- plot_these_alpha[match(RvElong_forplotting$alpha,plot_these_alpha$a),"interpt"]
+RvElong_forplotting$alpha <- as.character(RvElong_forplotting$alpha)
+str(RvElong_forplotting)
+# add column with intercept point for each alpha
+LEPlineslope = round(1/conLEP,digits=2)
 top <- ggplot(data=RvElong_forplotting,aes(x=eggs,y=value,linetype=alpha)) + geom_line() +
   geom_dl(aes(label=alpha),method="last.points") +
-  geom_abline(intercept=0, slope=1, color="black",size=1) + theme_classic() + 
+  geom_abline(intercept=0, slope=LEPlineslope, color="black",size=1) + theme_classic() + 
   ylab("Recruits") + xlab("Egg production") +
-  geom_point(aes(x=interpt,y=interpt,group=alpha),size=3) +
+  geom_point(aes(x=interpt,y=LEPlineslope*interpt,group=alpha),size=3) +
   theme(legend.position = "none") 
-# FIG 2(b) - Schematic showing slope at intersection for multiple alpha values
-bottom <- ggplot(data=datalpha,aes(x=a,y=slopes)) + geom_line() +
-  geom_point(data=plot_these_alpha,aes(x=a,y=slopes),size=3) +
-  geom_text(data=plot_these_alpha,aes(label=a),nudge_x=0.3,nudge_y=0.04) +
-  xlab(expression(alpha)) +
-  ylab("Slope of the Beverton-Holt\n curve at the intersection with 1/LEP") +
-  theme_classic()
+# # FIG 1(b) - Schematic showing slope at intersection for multiple alpha values
+# bottom <- ggplot(data=datalpha,aes(x=a,y=slopes)) + geom_line() +
+#   geom_point(data=plot_these_alpha,aes(x=a,y=slopes),size=3) +
+#   geom_text(data=plot_these_alpha,aes(label=a),nudge_x=0.3,nudge_y=0.04) +
+#   xlab(expression(alpha)) +
+#   ylab("Slope of the Beverton-Holt\n curve at the intersection with 1/LEP") +
+#   theme_classic()
 # export figure
-plist <- list(top,bottom)
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig2_schematic.tiff', units="in", width=4, height=7, res=300)
-#jpeg(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/Fig1_schematic.jpg') #note: file name specifies the alpha used in simluation model
-do.call(grid.arrange,c(plist,ncol=1))
+
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript3/fig1_schematic.tiff', units="in", width=4, height=4, res=300)
+#do.call(grid.arrange,c(plist,ncol=1))
+top
 dev.off()
+rm(top)
 
 # -------
 # Alternative Fig for schematic - showing one BH curve and multiple 1/LEP
@@ -284,32 +378,40 @@ ee <- seq(from=0,to=b*10,by=b/10000) #range of egg values
 rr <- BH(alpha=a,beta=b,E=ee)
 dd <- as.data.frame(cbind(ee,rr))
 # calculate x and y end points for segments on plot (1/LEP line)
-y1 = rep(0,length=length(datalpha[,1]))
-y2 = rep(1000,length=length(datalpha[,1]))
-x1 = rep(0,length=length(datalpha[,1]))
-x2 = c(y2/datalpha$slopes)
+y1 = rep(0,length=length(selectedalphas))
+y2 = rep(1000,length=length(selectedalphas))
+x1 = rep(0,length=length(selectedalphas))
+slopes_to_plot <- datalpha %>% filter(a %in% c(1.1,"1.4",2.0,"3.3",10.0)) %>% select(slopes) 
+x2 = c(y2/ slopes_to_plot )
+x2 <- x2[['slopes']]
 df <- data.frame(cbind(y1,y2,x1,x2))
 
+# this plot needs fixing: put black circle at intersection point
 ggplot(dd,aes(x=ee,y=rr)) + geom_line() +
   ylim(0,1500) +
   geom_segment(data=df,aes(x=x1,y=y1,xend=x2,yend=y2)) +
-  theme_classic()
+  theme_classic() +
+  xlab("Egg production" ) +
+  ylab("Recruits") +
+  geom_point(data=plot_these_alpha,aes(x=a,y=interpt),size=3)
 
-
+rm(y1,y2,x1,x2,slopes_to_plot,df,dd,b,a,ee,rr)
 
 
 # *************************************** #
 # (3) Simulate pops. Loop over Aarray list to simulate using different Leslie matrices 
 # *************************************** #
 # set params for simulation:
+# first, calculate alpha for each value of k
+# k = 1/(alpha*LEP^2) --> we adjusted LEP above to be 2 for all pops
+alphas = round(1/(kvals*conLEP^2),digits=2)
+alphas = unique(alphas)
 timesteps = 1000 #need this now to create
 rm_first_timesteps = 200
 betas = 1000
-alphas <- seq(from=0.1, to=10, by=0.1) #these correspond to 
+#alphas <- seq(from=1.1, to=10, by=0.01) #these correspond to 
 sig_r = 0.3
-span.multiplier = 1 # adjusting the span in spec.prgm()
-#alphas <- rep(alpha, length=length(codNames)) #alpha could be diff for pops
-
+#span.multiplier = 1 # adjusting the span in spec.prgm()
 
 output.3d.list <- as.list(rep(NA,length=length(codNames))) #store timeseries here
 names(output.3d.list) <- codNames
@@ -332,7 +434,7 @@ for (i in 1:length(Aarray)) { #step through each pop
   
   #Run this loop if you vary alpha and keep beta constant
   for (a in 1:length(alphas)) { #step through each Leslie matrix (for when k=1)
-    output = sim_model(A=Leslie3d[,,10], timesteps=timesteps, 
+    output = sim_model(A=Leslie3d[,,which(1.0==kvals)[[1]]], timesteps=timesteps, 
                        alpha=alphas[a], beta=betas, 
                        sig_r=sig_r, initial_eggs=betas)
     
@@ -342,12 +444,13 @@ for (i in 1:length(Aarray)) { #step through each pop
   }
   
   output.3d.list[[i]] <- output.matrix
+  print(i)
 }
 rm(i,a,Leslie3d,output.matrix,output) #clean up
 
 # At this point I have one important object:
 # 1. [output.3d.list] a list of 3d arrays. Each array is timeseries output
-#    from simulations at different F levels. 
+#    from simulations at different alpha levels. 
 
 
 # *************************************** #
@@ -356,21 +459,22 @@ rm(i,a,Leslie3d,output.matrix,output) #clean up
 variable_type <- c("Nt","eggs","recruits","Nsize")
 
 # --- reorganize egg timeseries data --- #
-var.number <- 2 # eggs
-df.list <- as.list(rep(NA,length=length(codNames)))
-names(df.list) <- codNames
-for (i in 1:length(output.3d.list)) {
-  # first, reformat data to work with ggplot
-  aa <- as.data.frame(output.3d.list[[i]][,var.number,])
-  aa$year <- seq(from=1, to=length(aa[,1]))
-  colnames(aa) <- c(alphas,"year")
-  aa1 <- aa %>% gather(alphavalue,value,1:length(alphas))
-  aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
-  aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
-  df.list[[i]] <- aa1
-  rm(aa1,aa)}
-eggs.ts <- do.call(rbind,df.list)
-rm(df.list,i) #clean up
+#var.number <- 2 # eggs
+#df.list <- as.list(rep(NA,length=length(codNames)))
+#names(df.list) <- codNames
+#for (i in 1:length(output.3d.list)) {
+#  # first, reformat data to work with ggplot
+#  aa <- as.data.frame(output.3d.list[[i]][,var.number,])
+#  aa$year <- seq(from=1, to=length(aa[,1]))
+#  colnames(aa) <- c(alphas,"year")
+#  aa1 <- aa %>% gather(alphavalue,value,1:length(alphas))
+#  aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
+#  aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
+#  df.list[[i]] <- aa1
+#  rm(aa1,aa)}
+#eggs.ts <- do.call(rbind,df.list)
+#eggs.ts$alphavalue <- as.numeric(as.character(eggs.ts$alphavalue))
+#rm(df.list,i) #clean up
 
 # --- reorganize recruit timeseries data --- #
 var.number <- 3 # recruits
@@ -384,50 +488,59 @@ for (i in 1:length(output.3d.list)) {
   aa1 <- aa %>% gather(alphavalue,value,1:length(alphas))
   aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
   aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
+  aa1$alphavalue <- as.numeric(as.character(aa1$alphavalue))
   df.list[[i]] <- aa1
-  rm(aa1,aa)}
-recruits.ts <- do.call(rbind,df.list)
-rm(df.list) #clean up
+  print(i)
+  }
+recruits.ts <- bind_rows(df.list,id=NULL)
+#recruits.ts$alphavalue <- as.numeric(as.character(recruits.ts$alphavalue))
+str(recruits.ts)
+rm(df.list,i,aa1,aa,var.number) #clean up
 
 # --- reorganize Nsize timeseries data --- #
-var.number <- 4 # Nsize
-df.list <- as.list(rep(NA,length=length(codNames)))
-names(df.list) <- codNames
-for (i in 1:length(output.3d.list)) {
-  # first, reformat data to work with ggplot
-  aa <- as.data.frame(output.3d.list[[i]][,var.number,])
-  aa$year <- seq(from=1, to=length(aa[,1]))
-  colnames(aa) <- c(alphas,"year")
-  aa1 <- aa %>% gather(alphavalue,value,1:length(alphas))
-  aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
-  aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
-  df.list[[i]] <- aa1
-  rm(aa1,aa)}
-nsize.ts <- do.call(rbind,df.list)
-rm(df.list) #clean up
+#var.number <- 4 # Nsize
+#df.list <- as.list(rep(NA,length=length(codNames)))
+#names(df.list) <- codNames
+#for (i in 1:length(output.3d.list)) {
+#  # first, reformat data to work with ggplot
+#  aa <- as.data.frame(output.3d.list[[i]][,var.number,])
+#  aa$year <- seq(from=1, to=length(aa[,1]))
+#  colnames(aa) <- c(alphas,"year")
+#  aa1 <- aa %>% gather(alphavalue,value,1:length(alphas))
+#  aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
+#  aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
+#  df.list[[i]] <- aa1
+#  }
+#nsize.ts <- do.call(rbind,df.list)
+#rm(df.list,i,aa1,aa) #clean up
 
-ts.data <- rbind(eggs.ts,recruits.ts,nsize.ts) #combine data
+#ts.data <- rbind(eggs.ts,recruits.ts) #combine data -- too big!
+ts.data <- recruits.ts
 rownames(ts.data) <- NULL
+ts.data$peak <- eigentable[match(ts.data$codNames,eigentable$codNames),"mode_age"]
+ts.data$cvs <- eigentable[match(ts.data$codNames,eigentable$codNames),"cvs_mode"]
 head(ts.data)
+rm(recruits.ts)
 
-# Put in appendix:
+# Appendix - time series CV vs alpha
 # For each cod population, calculate CV of time series (for recruits)
 # and plot it against the corresponding beta value
 pp <- as.list(rep(NA,length=length(codNames)))
 for(i in 1:length(codNames)){
-  dat <- ts.data[ts.data$codNames == codNames[i] & ts.data$variable == "recruits",]
-  cvs <- rep(NA,length=length(alphas))
-  for(b in 1:length(alphas)){
-    vals <- dat[dat$alphavalue == alphas[b],]$value[rm_first_timesteps:(timesteps-2)]
-    cvs[b] <- sd(vals)/mean(vals)
+  dat <- ts.data[ts.data$codNames == codNames[i],]
+  cvs <- rep(NA,length=length(alphas)) #store cv for each alpha here
+  for(b in 1:length(alphas)){ #step through alpha vals
+    vals <- dat[dat$alphavalue == alphas[b],]$value[rm_first_timesteps:(timesteps-2)]#rm initial tsteps
+    cvs[b] <- sd(vals)/mean(vals) #cv=sd/mean
   }
   cvdat <- as.data.frame(cbind(cvs,alphas))
   pp[[i]] <- ggplot(cvdat,aes(x=alphas,y=cvs)) + geom_line() + 
-    ggtitle(paste(codNames[i],"(b=1000)")) +
-    ylab("") + xlab("") + ylim(c(0,0.1))
+    ggtitle(paste(codNames[i])) +
+    ylab("") + xlab("") + ylim(c(0,0.25)) + xlim(c(0.8,6))
+  print(i)
 }
 
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/figS_cv_vs_alpha.tiff', 
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript3/SI/figS_cv_vs_alpha.tiff', 
      units="in", width=7, height=8, res=300) 
 do.call(grid.arrange,c(pp,ncol=4,left="time series CV",bottom="alpha value"))
 dev.off()
@@ -440,31 +553,33 @@ dev.off()
 # Put in appendix:
 #plot recruitment - one plot per pop, similar to egg plots
 #time series for 4 k values 
-selectedalphas <- factor(c(1.1,1.4,2,3.3,10))
-prec <- list()
-codNames_ordered_by_peak <- eigentable %>% arrange(mode_age) %>% pull(codNames)
-codNames_ordered_by_peak_plot <- eigentable %>% arrange(mode_age) %>% pull(codNames_plot)
+
+str(ts.data)
+
+
+prec <- as.list(rep(NA,length=length(codNames_ordered_by_peak)))
 
 for (i in 1:length(codNames_ordered_by_peak)){
   dd <- ts.data[ts.data$variable == "recruits" & 
                   ts.data$codNames == codNames_ordered_by_peak[i] &
-                  ts.data$year %in% seq(from=rm_first_timesteps,to=(timesteps-2),by=1) &
+                  ts.data$year %in% seq(from=rm_first_timesteps,to=(timesteps-500),by=1) &
                   ts.data$alphavalue %in% selectedalphas,]
-  dd$kval <- as.character(round(1/as.numeric(dd$alphavalue),digits=2))
+  dd$kval <- factor(round(1/(dd$alphavalue*conLEP^2),digits=2))
   
   prec[[i]] <- ggplot(dd, #aes(x=year,y=value,color=Fval)) +
                    aes(x=year,y=value,color=kval)) +
     xlab("") + ylab("") +
-    geom_line() + theme_classic() + ylim(c(75,1050)) +
+    geom_line() + theme_classic() +
     #scale_color_brewer(palette = "Reds") +
-    ggtitle(paste(codNames_ordered_by_peak_plot[i]))
+    ggtitle(paste(codNames_ordered_by_peak_plot[i]," (peak=",dd$peak[1]," cv=",round(dd$cvs[1],digits=2),")",sep="")) #+ylim(840,1000)
+  print(i)
 }
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/figS_timeseries_recruits_sigmaR0.3.tiff', units="in", width=7, height=13, res=300) 
-do.call(grid.arrange,c(prec,ncol=2,left="Recruits (before noise)", bottom="Year"))
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript3/SI/figS_timeseries_recruits_sigmaR0.3.tiff', units="in", width=7, height=13, res=300) 
+do.call(grid.arrange,c(prec[2],ncol=2,left="Recruits (before noise)", bottom="Year",
+                       top="sigmaR = 0.3, Gislason"))
 dev.off()
-rm(selectedalphas,prec)
+rm(prec)
 
-selectedalphas <- factor(c(1.1,1.4,2,3.3,10))
 prec <- list()
 theseones <- c("Celtic","W_Baltic","cod2J3KL","NE_Arctic")
 for (i in 1:length(theseones)){
@@ -482,12 +597,15 @@ for (i in 1:length(theseones)){
     labs(subtitle = paste(theseones[i]))
     #ggtitle(paste(theseones[i]))
 }
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig4a_timeseries_sigR0.3.tiff', units="in", width=4, height=6, res=300) 
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript3/fig3b_timeseries_sigR0.3.tiff', units="in", width=4, height=6, res=300) 
 do.call(grid.arrange,c(prec,ncol=1,left="Recruits (before noise)", bottom="Year"))
 dev.off()
-rm(selectedalphas,prec)
+rm(prec)
 
-my_palette = brewer.pal(5, "Reds")
+# Create fig of all spawning biomass distributions (for appendix) 
+# & subset of 4 populations for manuscript
+
+
 # *************************************** #
 # (5) Calculate frequency content from timeseries
 # *************************************** #
@@ -496,10 +614,15 @@ my_palette = brewer.pal(5, "Reds")
 # 2. Store spec values for eggs, recruits, and Nsize
 
 # 1. Walk through each cod pop, do spectral analysis at alpha levels
-sp.eggsL <- as.list(rep(NA,length=length(codNames))) #object for spec analysis  
-sp.recruitL <- as.list(rep(NA,length=length(codNames))) 
-#ts.for.spec.eg <- as.list(rep(NA,length=length(codNames)))
-#ts.for.spec.re <- as.list(rep(NA,length=length(codNames)))
+#sp.eggsL <- as.list(rep(NA,length=length(codNames))) #object for spec analysis  
+sp.recruitLsm <- as.list(rep(NA,length=length(codNames))) 
+span.multiplier= 1.5
+# testing small number of alphas for saving time, run only the alphas associated
+# with plotting the grid plots
+alphas.grid <- c(8.26,7.51,6.36,5.51,4.59,3.31,2.07,1.38,0.97)
+alphas <- alphas.grid
+
+
 
 for (i in 1:length(codNames)){
   
@@ -529,26 +652,40 @@ for (i in 1:length(codNames)){
   # --- spectral analysis on RECRUIT --- #
   spsaveL <- as.list(rep(NA,length=length(alphas)))
   names(spsaveL) <- alphas
+  
   for (b in 1:length(alphas)){
-    yy = ts[ts$variable == "recruits" & ts$alphavalue == alphas[b],]$value[rm_first_timesteps:(timesteps-2)] - mean(ts[ts$variable == "recruits" & ts$alphavalue == alphas[b],]$value[rm_first_timesteps:(timesteps-2)])
-    sp = spec.pgram(yy,spans=c(m,m),plot = FALSE)
+    yy = ts %>% filter(round(alphavalue,digits=2) == round(alphas[b],digits=2)) %>% select(value) %>% slice(rm_first_timesteps:(timesteps-2)) 
+    #meanyy = mean(rawyy$value)
+    #yy = rawyy$value-meanyy
+    
+    sp = spec.pgram(yy$value,spans=c(m,m),taper=0.1,plot = FALSE,demean = TRUE)
     spsaveL[[b]] = 2*sp$spec # save matrix of spec values for different FLEP, index by pop i
+    print(b)
   }
   spsave <- as.data.frame(do.call(cbind,spsaveL))
   spsave$freq <- sp$freq
   spsavelong <- spsave %>% gather(alphavalue, value, 1:length(alphas))
   spsavelong$codNames <- rep(codNames[i],length=length(spsavelong[,1]))
-  sp.recruitL[[i]] <- spsavelong
-  rm(spsave)
+  sp.recruitLsm[[i]] <- spsavelong
+  rm(spsave,yy,sp)
   print(i)
 }
 #eggs <- do.call(rbind,sp.eggsL)
 #eggs$variable.type <- rep("eggs",length=length(eggs$freq))
-rec <- do.call(rbind,sp.recruitL)
+rec <- bind_rows(sp.recruitL,id=NULL)
 rec$variable.type <- rep("recruits",length=length(rec$freq))
-specdatalong <- rec
-head(specdatalong)
 
+recsm <- bind_rows(sp.recruitLsm,id=NULL)
+recsm$variable.type <- rep("recruits",length=length(recsm$freq))
+
+specdatalong <- recsm
+head(specdatalong)
+#specdatalong$alphavalue <- factor(specdatalong$alphavalue,levels=selectedalphas)
+specdatalong$peak <- eigentable[match(specdatalong$codNames,eigentable$codNames),"mode_age"]
+specdatalong$cvs <- eigentable[match(specdatalong$codNames,eigentable$codNames),"cvs_mode"]
+specdatalong$cvs <- round(specdatalong$cvs,digits=2)
+str(specdatalong)
+rm(recsm)
 # *************************************** #
 # (6) Plot spectral analysis 
 # *************************************** #
@@ -582,23 +719,68 @@ for (i in 1:length(codNames_ordered_by_peak)){
                                 specdatalong$alphavalue %in% selectedalphas,]
   # store plots in list
   prec_sp[[i]] <- ggplot(data=dataforplot, aes(x=freq,y=value,group=alphavalue)) + 
-    geom_line(aes(color=alphavalue)) + ylim(0,50000) +
+    geom_line(aes(color=alphavalue)) + 
+    scale_y_log10(limits = c(0.001,2500),breaks=c(1,100,1000)) +
     geom_vline(xintercept = (1/eigentable[eigentable$codNames == codNames_ordered_by_peak[i],]$mode_age),
                linetype="dotted") +
-    geom_text(x=((1/eigentable[eigentable$codNames == codNames_ordered_by_peak[i],]$mode_age)+0.06), 
-              y=40000, label=eigentable[eigentable$codNames == codNames_ordered_by_peak[i],]$mode_age, size=4) +
-    ggtitle(paste(codNames_ordered_by_peak_plot[i])) + 
-    theme_classic() + ylab("") + xlab("") + theme(legend.position = "none") +
+    ggtitle(paste(codNames_ordered_by_peak_plot[i]," peak=",dataforplot$peak[1]," cv=",dataforplot$cvs[1],sep="")) + 
+    theme_classic() + ylab("") + xlab("") + #theme(legend.position = "none") +
     scale_colour_manual(values=cs) +
-    theme(plot.title = element_text(size = 10)) 
+    theme(plot.title = element_text(size = 10)) #+
+  # geom_text(x=((1/eigentable[eigentable$codNames == codNames_ordered_by_peak[i],]$mode_age)+0.06), 
+  #            y=40000, label=eigentable[eigentable$codNames == codNames_ordered_by_peak[i],]$mode_age, size=4)
+    
     
 }
 names(prec_sp) <- codNames_ordered_by_peak
 rm(i,dataforplot)
 
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/figS_spectra_sigmaR0.3.tiff', units="in", width=7, height=7, res=300) 
-do.call(grid.arrange,c(prec_sp,ncol=4,left="Spectra",bottom="Frequency"))
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript2/fig1a_spectra_sigmaR0.3_smooth43.tiff', units="in", width=11, height=7, res=300) 
+do.call(grid.arrange,c(prec_sp,ncol=4,left="Variance",bottom="Frequency"))
 dev.off()
+
+# ---
+# Fig X. 3x3 plot (PEAK)
+dataforplot <- specdatalong[specdatalong$codNames %in% c("Iceland","Northsea","GB") &
+                              specdatalong$alphavalue %in% c(10,2.5,1.1),]
+dataforplot$skvals <- round((1/as.numeric(as.character(dataforplot$alphavalue))),digits = 2)
+dataforplot$skvals <- factor(dataforplot$skvals,levels = unique(dataforplot$skvals))
+dataforplot$codNames <- factor(dataforplot$codNames,levels = c("Iceland","Northsea","GB"))
+dataforplot$peak <- eigentable[match(dataforplot$codNames, eigentable$codNames),"mode_age"]
+dataforplot$line <- 1/(dataforplot$peak)
+dataforplot$linehalf <- dataforplot$line/2
+levels(dataforplot$codNames) <- c("Iceland (peak=10,CV=0.24)","Northsea (peak=5,CV=0.46)","GB (peak=3,CV=0.61)")
+
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/Fig3_3by3_peak.tiff', units="in", width=7, height=7, res=300) 
+ggplot(data=dataforplot,aes(x=freq,y=log10(value))) +
+  geom_line() + facet_grid(skvals ~ codNames) +
+  theme_bw() + 
+  geom_vline(data=dataforplot,aes(xintercept = line),linetype="dotted") +
+  geom_vline(data=dataforplot,aes(xintercept = linehalf),linetype="dashed") +
+  ggtitle("Dashed line = 1/(2T)    Dotted line = 1/T")
+dev.off()
+rm(dataforplot)
+
+# Fig X. 3x3 plot: pick populations with range of CV
+# pick: NE_Arctic, Northsea (or W_Baltic), W_Scotland (or GM)
+dataforplot <- specdatalong[specdatalong$codNames %in% c("NE_Arctic","W_Baltic","W_Scotland") &
+                              specdatalong$alphavalue %in% c(10,2,1.1),]
+dataforplot$skvals <- round((1/as.numeric(as.character(dataforplot$alphavalue))),digits = 2)
+dataforplot$skvals <- factor(dataforplot$skvals,levels = c(0.1,0.5,0.91))
+dataforplot$codNames <- factor(dataforplot$codNames,levels = c("NE_Arctic","W_Baltic","W_Scotland"))
+dataforplot$peak <- eigentable[match(dataforplot$codNames, eigentable$codNames),"mode_age"]
+dataforplot$line <- 1/(dataforplot$peak)
+dataforplot$linehalf <- dataforplot$line/2
+levels(dataforplot$codNames) <- c("NE_Arctic (CV=0.21,peak=9)","W_Baltic (CV=0.45,peak=5)","W_Scotland (CV=0.62,peak=3)")
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/Fig3_3by3_cvs.tiff', units="in", width=7, height=7, res=300) 
+ggplot(data=dataforplot,aes(x=freq,y=log10(value))) +
+  geom_line() + facet_grid(skvals ~ codNames) +
+  theme_bw() + geom_vline(data=dataforplot,aes(xintercept = line),linetype="dotted") +
+  geom_vline(data=dataforplot,aes(xintercept = linehalf),linetype="dashed") +
+  ggtitle("Dashed line = 1/(2T)    Dotted line = 1/T")
+dev.off()
+rm(dataforplot)
+
 
 # choose only pops with peak age at 3 or 4
 #t <- textGrob("")
@@ -631,78 +813,238 @@ dev.off()
 # *************************************** #
 # --- recruits spectra: all on one plot ---#
 dataforplot <- specdatalong[specdatalong$variable.type == "recruits" &
-                              specdatalong$alphavalue %in% c(10),] # select one alpha value
+                              specdatalong$alphavalue %in% alphas[2],] # select one alpha value
 dataforplot$peak <- eigentable[match(dataforplot$codNames, eigentable$codNames),"mode_age"]
 dataforplot$maxage <- eigentable[match(dataforplot$codNames, eigentable$codNames),"max_ages"]
 dataforplot$sd_mode <- eigentable[match(dataforplot$codNames, eigentable$codNames),"sd_mode"]
-dataforplot$cvs_mode <- eigentable[match(dataforplot$codNames, eigentable$codNames),"cvs_mode"]
+#dataforplot$cvs_mode <- eigentable[match(dataforplot$codNames, eigentable$codNames),"cvs_mode"]
+dataforplot$codNames_peak <- paste(dataforplot$codNames,"(",dataforplot$peak,")",sep="")
 dataforplot$codNames <- factor(dataforplot$codNames, 
                                levels=c("Coas","cod3M","cod3NO","cod3Ps","Northsea",
                                  "Faroe","GB","GM","Iceland","Kat","NGulf","W_Scotland",
                                  "Celtic","NE_Arctic","cod2J3KL","W_Baltic"))
-j <- ggplot(dataforplot, aes(x=freq,y=value,group=codNames)) + 
-  geom_line(aes(color=peak)) + theme_classic() + 
-  ggtitle("a") +
-  ylab("") + xlab("") +
-  theme(plot.title = element_text(size = 12)) +
-  guides(fill=guide_legend(title="Peak spawning age"))
-  
-jj <- ggplot(dataforplot, aes(x=freq,y=value,group=codNames)) + 
-  geom_line(aes(color=maxage)) + theme_classic() + 
-  ggtitle("b") +
-  ylab("") + xlab("") +
-  theme(plot.title = element_text(size = 12)) +
-  guides(fill=guide_legend(title="Max age"))
+dataforplot$cvs_cat <- rep(NA,length=length(dataforplot$freq))
+dataforplot[dataforplot$cvs < 0.3,]$cvs_cat <- 1 #"narrow CV (0.19-0.27)"
+dataforplot[dataforplot$cvs > 0.5,]$cvs_cat <- 2 #"medium CV (0.32-0.46)"
+dataforplot[is.na(dataforplot$cvs_cat),]$cvs_cat <- 3 #"wide CV (0.51-0.67)"
+dataforplot$cvs_cat <- factor(dataforplot$cvs_cat)
 
-jjj <- ggplot(dataforplot, aes(x=freq,y=value,group=codNames)) + 
-  geom_line(aes(color=cvs_mode)) + theme_classic() + 
-  guides(fill=guide_legend(title="CV")) +
-  ggtitle("c") +
-  ylab("") + xlab("") +
-  theme(plot.title = element_text(size = 12)) 
+# j <- ggplot(dataforplot, aes(x=freq,y=value,group=codNames)) + 
+#   geom_line() + theme_classic() + 
+#   geom_text(data=dataforplot[dataforplot$freq == 0.5,],
+#             aes(label=codNames,color=codNames,x=Inf,y=value))+
+#   ggtitle("Spectra for all populations (smooth = 43y)") +
+#   ylab("log scale") + xlab("frequency") +
+#   guides(fill=guide_legend(title="Peak spawning age")) +
+#   theme(plot.title = element_text(size = 12)) + scale_y_log10()
+
+colourCount = length(unique(dataforplot$codNames_peak))
+getPalette = colorRampPalette(brewer.pal(9, "Paired"))
+# s <- ggplot(dataforplot, aes(x=freq,y=value,group=codNames_peak,color=codNames_peak)) + 
+#   geom_line() + theme_classic() + 
+#   geom_text_repel(data=dataforplot[dataforplot$freq == 0.5,],
+#                   aes(label=codNames_peak,color=codNames_peak,x=0.5,y=value),
+#                   size = 3, xlim=c(0,0.7), force=10,
+#                   na.rm = TRUE) +
+#   ggtitle("Spectra for all populations (smooth = 43y, Pauly)") +
+#   ylab("log scale") + xlab("frequency") +
+#   scale_color_manual(values = getPalette(colourCount)) +
+#   #scale_colour_discrete(guide = 'none')  + 
+#   theme(plot.margin =margin(0,0,0,0,"cm"),legend.position = "right") +
+#   xlim(0,0.7) + scale_y_log10() 
+
+# mycolors <- brewer.pal(3,"Set1")
+# names(mycolors) <- levels(dataforplot$cvs_cat)
+# colScale <- scale_color_manual(values=mycolors)
+
+# calc average spectra line for the three CV bins
+head(dataforplot)
+dataforplot1 <- dataforplot %>% select(freq,value,codNames) %>% spread(codNames,value)
+dataforplot1 <- dataforplot1 %>% 
+  rowwise() %>% mutate(avg.narrow=mean(NE_Arctic,Coas,cod3NO,Iceland)) %>%
+  rowwise() %>% mutate(avg.medium=mean(W_Scotland,Celtic,Kat,Faroe,GM,GB,cod2J3KL)) %>% 
+  rowwise() %>% mutate(avg.wide=mean(cod3M,Northsea,NGulf,cod3Ps,W_Baltic))
+dataforplot2 <- dataforplot1 %>% gather(codNames,value,2:(length(dataforplot1[1,])))
+
+
+
+sp <- ggplot(dataforplot, aes(x=freq,y=value,group=codNames_peak,color=cvs_cat)) + 
+  geom_line() + #scale_color_manual(values=greycolors3)+
+  theme_classic() + 
+  geom_text_repel(data=dataforplot[dataforplot$freq == 0.5,],
+                  aes(label=codNames_peak,color=cvs_cat,x=0.5,y=value),
+                  size = 3, xlim=c(0.5,0.8), force=10,
+                  na.rm = TRUE) +
+  #ggtitle("Spectra for all populations (smooth = 43y, Pauly)") +
+  ylab("log scale") + xlab("frequency") + 
+  theme(plot.margin =margin(0,0,0,0,"cm"),legend.position = "right") +
+  xlim(0,0.7) + scale_y_log10() +
+  scale_color_discrete(name="CV bins",
+                      #breaks=c(1,2,3),
+                      labels=c("narrow (0.19-0.27)", "medium (0.32-0.46)", "wide (0.51-0.67)")) 
+  
+# not log scale
+# np <- ggplot(dataforplot, aes(x=freq,y=value,group=codNames_peak,color=codNames_peak)) + 
+#   geom_line() + theme_classic() + 
+#   geom_text_repel(data=dataforplot[dataforplot$freq == 0.1,],
+#                   aes(label=codNames_peak,color=codNames_peak,x=0.1,y=value),
+#                   size = 3, xlim=c(0,0.5), force=7,
+#                   na.rm = TRUE,box.padding=2) +
+#   ggtitle("Spectra for all populations (smooth = 43y)") +
+#   ylab("") + xlab("frequency") +
+#   scale_color_manual(values = getPalette(colourCount)) +
+#   #scale_colour_discrete(guide = 'none')  + 
+#   theme(plot.margin =margin(0,0,0,0,"cm"),legend.position = "right") +
+#   xlim(0,0.35) + ylim(0,10000) 
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript3/fig3c_spectra_oneplot_CVCATsmooth43.tiff',units="in", width=6, height=6, res=300) 
+sp
+dev.off()
+rm(p)
+
+
+# *******
+# Cumulative Variance from spectra plot
+# *******
+codNames <- as.character(codNames)
+sumL <- as.list(rep(NA,length=length(codNames)))
+for(c in 1:length(codNames)){
+  
+  dataforplot <- specdatalong[specdatalong$codNames == codNames[c] &
+                              specdatalong$alphavalue == alphas[2],]
+  # vector to store cum var at each freq level
+  sums <- rep(NA,length=length(dataforplot$freq))
+  
+  #step through each level of freq
+  for(i in 1:length(sums)){ 
+    #first identify which frequencies you care about
+    sumoverthese <- seq(from=dataforplot$freq[1],to=dataforplot$freq[i],by=dataforplot$freq[1])
+    #subset on those freq, then sum the variance values
+    sums[i] <- sum(dataforplot[dataforplot$freq %in% sumoverthese,]$value)
+  }
+   
+  #store df: codNames, freq, sum of var up through that freq, and peak age
+  sumdf <- as.data.frame(cbind(dataforplot$freq,
+                               sums,
+                               rep(codNames[c],length=length(sums)), 
+                               rep(eigentable[eigentable$codNames == codNames[c],]$mode_age, length=length(sums))))
+  colnames(sumdf) <- c("freq","sums","codNames","peak")
+  sumdf$freq <- as.numeric(as.character(sumdf$freq)) #fixing factors 
+  sumdf$peak <- as.numeric(as.character(sumdf$peak)) #fixing factors
+  sumdf$sums <- as.numeric(as.character(sumdf$sums)) #fixing factors
+  sumdf$freqpeak <- (sumdf$freq)*(sumdf$peak)
+  sumL[[c]] <- sumdf 
+  rm(sumoverthese,sums,sumdf)
+}
+sumsdf <- bind_rows(sumL,id=NULL)
+sumsdf$sums <- as.numeric(sumsdf$sums)
+sumsdf$freq <- as.numeric(as.character(sumsdf$freq))
+head(sumsdf)
+str(sumsdf)
+
+poverall <- ggplot(data=sumsdf,aes(x=freqpeak,y=sums,group=codNames,color=codNames,label=codNames)) +
+  geom_line() + xlab("freq*peak") +
+  theme_bw() +
+  scale_x_continuous(limits=c(0,5.5),breaks=seq(from=0,to=5.5,by=0.5)) +
+  #ggtitle("(c) Cumulative variance (x-axis is freq*peak)") +
+  ylab("Cumulative variance") + xlab("Frequency*Peak age") +
+  scale_color_discrete(name="Cod Population") #+ scale_y_log10()
+
+  
+# pzoom <- ggplot(data=sumsdf,aes(x=freqpeak,y=sums,group=codNames,color=codNames,label=codNames)) +
+#   geom_line() + xlab("freq*peak") +
+#   theme_bw() +
+#   scale_x_continuous(limits=c(0,1.5),breaks=seq(from=0,to=1.5,by=0.5)) +
+#   scale_y_continuous(limits=c(15000,30000)) +
+#   ggtitle("(d) Cumulative variance, zoomed in (x-axis is freq*peak)") +
+#   ylab("cumulative variance")
+# 
+# ggplot(dataforplot, aes(x=freq,y=value,group=codNames_peak,color=codNames_peak)) + 
+#   geom_line() + theme_classic() + 
+#   geom_text_repel(data=dataforplot[dataforplot$freq == 0.5,],
+#                   aes(label=codNames_peak,color=codNames_peak,x=0.5,y=value),
+#                   size = 3, xlim=c(0,0.7), force=10,
+#                   na.rm = TRUE) +
+#   ggtitle("Spectra for all populations (smooth = 43y, Pauly)") +
+#   ylab("log scale") + xlab("frequency") +
+#   scale_color_manual(values = getPalette(colourCount)) +
+#   #scale_colour_discrete(guide = 'none')  + 
+#   theme(plot.margin =margin(0,0,0,0,"cm"),legend.position = "right") +
+#   xlim(0,0.7) + scale_y_log10() 
+
+# Appendix
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript3/SI/FigS_cumulative_cd_smooth43_freqpeak.tiff', units="in", width=6, height=6.5, res=300) 
+poverall
+#pab <- list(poverall,pzoom)
+#do.call(grid.arrange,c(pab,ncol=2))
+dev.off()
+
+# jj <- ggplot(dataforplot, aes(x=freq,y=value,group=codNames)) +
+#   geom_line(aes(color=maxage)) + theme_classic() +
+#   ggtitle("b") +
+#   ylab("") + xlab("") +
+#   theme(plot.title = element_text(size = 12)) +
+#   guides(fill=guide_legend(title="Max age"))
+# 
+# jjj <- ggplot(dataforplot, aes(x=freq,y=value,group=codNames)) +
+#   geom_line(aes(color=peak)) + theme_classic() +
+#   guides(fill=guide_legend(title="CV")) +
+#   ggtitle("c") +
+#   ylab("") + xlab("") +
+#   theme(plot.title = element_text(size = 12)) +
+#   scale_y_log10()
 
 #set all pops to one color
-line.cols <- rep("grey",16) 
-CN <- c("Coas","cod3M","cod3NO","cod3Ps","Northsea",
-        "Faroe","GB","GM","Iceland","Kat","NGulf","W_Scotland",
-        "Celtic","NE_Arctic","cod2J3KL","W_Baltic")
-CN.t <- as.data.frame(cbind(CN,line.cols),stringsAsFactors = FALSE)
-names(CN.t) <- c("pops","line.cols")
-CN.t[CN.t$pops == "NE_Arctic",]$line.cols <- "tomato"
-CN.t[CN.t$pops == "Celtic",]$line.cols <- "orange"
-CN.t[CN.t$pops == "cod2J3KL",]$line.cols <- "dodgerblue"
-CN.t[CN.t$pops == "W_Baltic",]$line.cols <- "green3"
-
-jjjj <- ggplot(dataforplot) + 
-  geom_line(aes(x=freq,y=value,color=codNames),size=1) + theme_classic() + 
-  scale_color_manual(values=CN.t$line.cols) +
-  ggtitle("b") + 
-  ylab("Variance") + xlab("") +
-  theme(plot.title = element_text(size = 14,hjust = -0.2),legend.position = "none" ) 
-
-# create spectra plot for a=1.1 (depleted)
-dataforplotD <- specdatalong[specdatalong$variable.type == "recruits" &
-                              specdatalong$alphavalue %in% c(1.1),] # select one alpha value
-dataforplotD$peak <- eigentable[match(dataforplotD$codNames, eigentable$codNames),"mode_age"]
-dataforplotD$maxage <- eigentable[match(dataforplotD$codNames, eigentable$codNames),"max_ages"]
-dataforplotD$sd_mode <- eigentable[match(dataforplotD$codNames, eigentable$codNames),"sd_mode"]
-dataforplotD$cvs_mode <- eigentable[match(dataforplotD$codNames, eigentable$codNames),"cvs_mode"]
-dataforplotD$codNames <- factor(dataforplotD$codNames, 
-                               levels=c("Coas","cod3M","cod3NO","cod3Ps","Northsea",
-                                        "Faroe","GB","GM","Iceland","Kat","NGulf","W_Scotland",
-                                        "Celtic","NE_Arctic","cod2J3KL","W_Baltic"))
-
-dddd <- ggplot(dataforplotD) + 
-  geom_line(aes(x=freq,y=value,color=codNames),size=1) + theme_classic() + 
-  scale_color_manual(values=CN.t$line.cols) +
-  #geom_line(data=dataforplot[dataforplot$codNames=="NE_Arctic",],aes(x=freq,y=value)) +
-  ggtitle("c") +
-  ylab("Variance") + xlab("") +
-  theme(plot.title = element_text(size = 14,hjust = -0.2),legend.position = "none" ) 
-p <- list(jjjj,dddd)
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig4bc_spectra_sigR0.3.tiff', units="in", width=4, height=7, res=300) 
-do.call(grid.arrange,c(p,ncol=1,bottom="Frequency"))
-dev.off()
+# line.cols <- rep("grey",16) 
+# CN <- c("Coas","cod3M","cod3NO","cod3Ps","Northsea",
+#         "Faroe","GB","GM","Iceland","Kat","NGulf","W_Scotland",
+#         "Celtic","NE_Arctic","cod2J3KL","W_Baltic")
+# CN.t <- as.data.frame(cbind(CN,line.cols),stringsAsFactors = FALSE)
+# names(CN.t) <- c("pops","line.cols")
+# CN.t[CN.t$pops == "NE_Arctic",]$line.cols <- "tomato"
+# CN.t[CN.t$pops == "Celtic",]$line.cols <- "orange"
+# CN.t[CN.t$pops == "cod2J3KL",]$line.cols <- "dodgerblue"
+# CN.t[CN.t$pops == "W_Baltic",]$line.cols <- "green3"
+# 
+# jjjj <- ggplot(dataforplot) + 
+#   geom_line(aes(x=freq,y=value,color=codNames),size=1) + theme_classic() + 
+#   scale_color_manual(values=CN.t$line.cols) +
+#   ggtitle("b") + 
+#   ylab("Variance") + xlab("") +
+#   theme(plot.title = element_text(size = 14,hjust = -0.2),legend.position = "none" ) 
+# 
+# # create spectra plot for a=1.1 (depleted)
+# dataforplotD <- specdatalong[specdatalong$variable.type == "recruits" &
+#                               specdatalong$alphavalue %in% c(1.1),] # select one alpha value
+# dataforplotD$peak <- eigentable[match(dataforplotD$codNames, eigentable$codNames),"mode_age"]
+# dataforplotD$maxage <- eigentable[match(dataforplotD$codNames, eigentable$codNames),"max_ages"]
+# dataforplotD$sd_mode <- eigentable[match(dataforplotD$codNames, eigentable$codNames),"sd_mode"]
+# dataforplotD$cvs_mode <- eigentable[match(dataforplotD$codNames, eigentable$codNames),"cvs_mode"]
+# dataforplotD$codNames <- factor(dataforplotD$codNames, 
+#                                levels=c("Coas","cod3M","cod3NO","cod3Ps","Northsea",
+#                                         "Faroe","GB","GM","Iceland","Kat","NGulf","W_Scotland",
+#                                         "Celtic","NE_Arctic","cod2J3KL","W_Baltic"))
+# 
+# ddddcut <- ggplot(dataforplotD) + 
+#   geom_line(aes(x=freq,y=value,color=codNames),size=1) + theme_classic() + 
+#   scale_color_manual(values=CN.t$line.cols) +
+#   #geom_line(data=dataforplot[dataforplot$codNames=="NE_Arctic",],aes(x=freq,y=value)) +
+#   ggtitle("d") +
+#   ylab("Variance") + xlab("") +
+#   theme(plot.title = element_text(size = 14,hjust = -0.2),legend.position = "none" ) +
+#   ylim(0,2000)
+# ddddylog <- ggplot(dataforplotD) + 
+#   geom_line(aes(x=freq,y=value,color=codNames),size=1) + theme_classic() + 
+#   scale_color_manual(values=CN.t$line.cols) +
+#   #geom_line(data=dataforplot[dataforplot$codNames=="NE_Arctic",],aes(x=freq,y=value)) +
+#   ggtitle("e") +
+#   ylab("Variance") + xlab("") +
+#   theme(plot.title = element_text(size = 14,hjust = -0.2),legend.position = "none" ) +
+#   scale_y_log10()
+# #p <- list(jjjj,dddd)
+# p <- list(ddddcut,ddddylog)
+# tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig4bc_spectra_log_ycutoffsigR0.3.tiff', units="in", width=4, height=7, res=300) 
+# do.call(grid.arrange,c(p,ncol=1,bottom="Frequency"))
+# dev.off()
 
 
 # *************************************** #
@@ -776,72 +1118,168 @@ freq <- 0.00125
 #threshold for high/low frequencies is 1/(2T) 
 eigentable$AUCthreshold <- 1/(eigentable$mode_age*2)
 AUCthreshold_ordered_by_peak <- eigentable %>% arrange(mode_age) %>% pull(AUCthreshold)
+#OR threshold could be the same for all pops:
+AUCthreshold_lowest <- rep(min(eigentable$AUCthreshold),length=length(eigentable$AUCthreshold))
 
-kvals <- unique(specdatalong$kval) #all possible kvals
-alphas <- unique(specdatalong$alphavalue)
-
-AUC_less_L <- as.list(rep(NA,length=length(alphas)))
-AUCperlow_L <- as.list(rep(NA,length=length(alphas)))
+AUC_fraction_L <- as.list(rep(NA,length=length(alphas)))
+AUCpercent_L <- as.list(rep(NA,length=length(alphas)))
 AUC_total_L <- as.list(rep(NA,length=length(alphas)))
 
-names(AUC_less_L) <- as.character(alphas)
+names(AUC_fraction_L) <- alphas
 names(AUC_total_L) <- alphas
-names(AUCperlow_L) <- alphas
+names(AUCpercent_L) <- alphas
 
 for (j in 1:length(alphas)){ #for each alpha (ie kval)...
   
-  AUC_less <- rep(NA,length=length(codNames_ordered_by_peak))
+  AUC_fraction <- rep(NA,length=length(codNames_ordered_by_peak))
   AUC_total <- rep(NA,length=length(codNames_ordered_by_peak))
-  AUCperlow <- rep(NA,length=length(codNames_ordered_by_peak))
+  AUCpercent <- rep(NA,length=length(codNames_ordered_by_peak))
   
   for (i in 1:length(codNames_ordered_by_peak)){ #step through the pops
     
-    AUC_less[i] <- sum(freq*specdatalong[specdatalong$variable.type == "recruits" 
+    # Check inequality sign for percent high or low variability
+    # multiple ht of each bar under curve by the width (one unit of x, freq)
+    AUC_fraction[i] <- sum(freq*specdatalong[specdatalong$variable.type == "recruits" 
                                   & specdatalong$codNames==codNames_ordered_by_peak[i]
                                   & specdatalong$alphavalue==alphas[j]
-                                  & specdatalong$freq <= AUCthreshold_ordered_by_peak[i],]$value)
+                                  & specdatalong$freq > AUCthreshold_ordered_by_peak[i],]$value)
+                               # > is for %high, =< is for %low
+    #AUC_fraction[i] <- sum(freq*specdatalong[specdatalong$variable.type == "recruits" 
+    #                                         & specdatalong$codNames==codNames_ordered_by_peak[i]
+    #                                         & specdatalong$alphavalue==alphas[j]
+    #                                         & specdatalong$freq > AUCthreshold_lowest[i],]$value)
+                               # > is for %high ... =< is for %low
     
     AUC_total[i] <- sum(freq*specdatalong[specdatalong$variable.type == "recruits" 
                                           & specdatalong$codNames==codNames_ordered_by_peak[i]
                                           & specdatalong$alphavalue==alphas[j],]$value)
-    AUCperlow[i] <- AUC_less[i]/AUC_total[i]
+    AUCpercent[i] <- AUC_fraction[i]/AUC_total[i]
     
   }
   #store percents for each k value
-  AUC_less_L[[j]]    <- AUC_less 
-  AUC_total_L[[j]]   <- AUC_total
-  AUCperlow_L[[j]]   <- AUCperlow
+  AUC_fraction_L[[j]] <- AUC_fraction 
+  AUC_total_L[[j]] <- AUC_total
+  AUCpercent_L[[j]] <- AUCpercent
   print(j)
 }
 rm(i,j)
-AUC_less_df <- data.frame(do.call(cbind,AUC_less_L))
+AUC_fraction_df <- data.frame(do.call(cbind,AUC_fraction_L))
 AUC_total_df <- data.frame(do.call(cbind,AUC_total_L))
-AUCperlow_df <- data.frame(do.call(cbind,AUCperlow_L))
+AUCpercent_df <- data.frame(do.call(cbind,AUCpercent_L))
 
-AUC_less_df$codNames <- codNames_ordered_by_peak
+AUC_fraction_df$codNames <- codNames_ordered_by_peak
 AUC_total_df$codNames <- codNames_ordered_by_peak
-AUCperlow_df$codNames <- codNames_ordered_by_peak
+AUCpercent_df$codNames <- codNames_ordered_by_peak
 
 
 # convert dfs to long format
-AUC_less_dflong <- AUC_less_df %>% gather(alpha,value,1:length(alphas)) %>% separate(alpha,c("addedX","alphaval"),sep="X") %>% select(-addedX) %>% mutate(AUCdes=rep("less"))
-AUC_total_dflong <- AUC_total_df %>% gather(alpha,value,1:length(alphas)) %>% separate(alpha,c("addedX","alphaval"),sep="X") %>% select(-addedX) %>% mutate(AUCdes=rep("total"))
-AUCperlow_dflong <- AUCperlow_df %>% gather(alpha,value,1:length(alphas)) %>% separate(alpha,c("addedX","alphaval"),sep="X") %>% select(-addedX) %>% mutate(AUCdes=rep("perlow"))
+AUC_fraction_dflong <- AUC_fraction_df %>% 
+  gather(alpha,value,1:length(alphas)) %>% 
+  separate(alpha,c("addedX","alphaval"),sep="X") %>% 
+  select(-addedX) %>% 
+  mutate(AUCdes=rep("fraction"))
+AUC_total_dflong <- AUC_total_df %>% 
+  gather(alpha,value,1:length(alphas)) %>% 
+  separate(alpha,c("addedX","alphaval"),sep="X") %>% 
+  select(-addedX) %>% 
+  mutate(AUCdes=rep("total"))
+AUCpercent_dflong <- AUCpercent_df %>% 
+  gather(alpha,value,1:length(alphas)) %>% 
+  separate(alpha,c("addedX","alphaval"),sep="X") %>% 
+  select(-addedX) %>% 
+  mutate(AUCdes=rep("percent"))
 
-AUCdat <- rbind(AUC_less_dflong,
+AUCdat <- rbind(AUC_fraction_dflong,
                 AUC_total_dflong,
-                AUCperlow_dflong)
+                AUCpercent_dflong)
 
+# add columns
+#eigentable$peakovermax <- round(eigentable$mode_age / eigentable$max_ages,digits=2)
+#AUCdat$peakovermax <- eigentable[match(AUCdat$codNames,eigentable$codNames),"peakovermax"]
 AUCdat$peak <- eigentable[match(AUCdat$codNames,eigentable$codNames),"mode_age"]
 AUCdat$maxage <- eigentable[match(AUCdat$codNames,eigentable$codNames),"max_ages"]
+AUCdat$codNames_plot <- eigentable[match(AUCdat$codNames,eigentable$codNames),"codNames_plot"]
+AUCdat$cvs <- eigentable[match(AUCdat$codNames,eigentable$codNames),"cvs_mode"]
+
+AUCdat$cvs <- round(AUCdat$cvs,digits=2)
 AUCdat$alphaval <- as.numeric(AUCdat$alphaval)
-AUCdat$kval <- round(1/AUCdat$alphaval,digits = 2)
-AUCdat <- AUCdat[AUCdat$kval <1,]
-# set k slopes to factor, order by increasing slope
+AUCdat$kval <- round(1/(AUCdat$alphaval*conLEP^2),digits = 2)
+AUCdat$codNames_plot_no <- paste(AUCdat$codNames_plot,"(",AUCdat$cvs,")",sep="") #new col w/codName+cv
+AUCdat$codNames_plot_no_peak <- paste(AUCdat$codNames_plot,"(",AUCdat$peak,")",sep="") #new col w/peak
+AUCdat$codNames_plot_no_maxage <- paste(AUCdat$codNames_plot,"(",AUCdat$maxage,")",sep="")
+#AUCdat$codNames_plot_no_peakovermax <- paste(AUCdat$codNames_plot,"(",AUCdat$peakovermax," p/m)",sep="")
+
+
+# set factor levels
 AUCdat$kval <- factor(AUCdat$kval,levels=unique(AUCdat$kval))
-AUCdat$kval <- factor(AUCdat$kval,levels=rev(levels(unique(AUCdat$kval))))
 
+# set codNames in order of CV
+codNames_plot_cvs_order <- unique(AUCdat$codNames_plot_no)
+codNames_plot_cvs_order <- factor(codNames_plot_cvs_order,
+                                  levels=unique(AUCdat[order(AUCdat$cvs),]$codNames_plot_no))
+AUCdat$codNames_plot_no <- factor(AUCdat$codNames_plot_no,levels=levels(codNames_plot_cvs_order))
 
+# set codNames in order of peak age
+codNames_plot_peak_order <- unique(AUCdat$codNames_plot_no_peak)
+codNames_plot_peak_order <- factor(codNames_plot_peak_order,
+                                   levels=unique(AUCdat[order(AUCdat$peak),]$codNames_plot_no_peak))
+AUCdat$codNames_plot_no_peak <- factor(AUCdat$codNames_plot_no_peak,
+                                       levels=levels(codNames_plot_peak_order))
+# set codNames in order of max age
+codNames_plot_max_order <- unique(AUCdat$codNames_plot_no_maxage)
+codNames_plot_max_order <- factor(codNames_plot_max_order,
+                                  levels=unique(AUCdat[order(AUCdat$maxage),]$codNames_plot_no_maxage))
+AUCdat$codNames_plot_no_maxage <- factor(AUCdat$codNames_plot_no_maxage,
+                                         levels=levels(codNames_plot_max_order))
+# set codNames in order of peakovermax
+#codNames_plot_peakovermax_order <- unique(AUCdat$codNames_plot_no_peakovermax)
+#codNames_plot_peakovermax_order <- factor(codNames_plot_peakovermax_order,
+#                                  levels=unique(AUCdat[order(AUCdat$peakovermax),]$codNames_plot_no_peakovermax))
+#AUCdat$codNames_plot_no_peakovermax <- factor(AUCdat$codNames_plot_no_peakovermax,
+#                                         levels=levels(codNames_plot_peakovermax_order))
+
+# *************************************** #
+# Gantt plot for fraction high frequency variance
+# *************************************** #
+# (a) lambda2/lambda1
+# start <- rep(NA,length=length(selectedkvals))
+# end <- rep(NA,length=length(selectedkvals))
+# for(i in 1:length(selectedkvals)){
+#   start[i] <- min(eigendata[eigendata$kvals == selectedkvals[i] & eigendata$eigen == "e12",]$value)
+#   end[i] <- max(eigendata[eigendata$kvals == selectedkvals[i] & eigendata$eigen == "e12",]$value)}
+# df <- as.data.frame(cbind(selectedkvals,start,end))
+# colnames(df) <- c("k","start","end")
+# df$k <- as.factor(df$k)
+# df$diff <- as.factor(round(df$end-df$start,digits=2))
+# gantt1 <- ggplot(data=df,aes(x=start,xend=end,y=k,yend=k,label=diff)) + 
+#   theme_bw() +
+#   geom_segment(size=8,color="grey") +
+#   labs(x=expression(paste(abs(lambda[2])/lambda[1])),y="k") +
+#   xlim(0.86,1) +
+#   geom_label(x=0.99,size=4)
+# rm(start,end,i,df)
+# 
+# # (b) fraction high frequency variance
+# start <- rep(NA,length=length(selectedkvals))
+# end <- rep(NA,length=length(selectedkvals))
+# for(i in 1:length(selectedkvals)){
+#   start[i] <- min(AUCdat[AUCdat$kval == selectedkvals[i] & AUCdat$AUCdes == "percent",]$value)
+#   end[i] <- max(AUCdat[AUCdat$kval == selectedkvals[i] & AUCdat$AUCdes == "percent",]$value)}
+# df <- as.data.frame(cbind(selectedkvals,start,end))
+# colnames(df) <- c("k","start","end")
+# df$k <- as.factor(df$k)
+# df$diff <- as.factor(round(df$end-df$start,digits=2))
+# gantt2 <- ggplot(data=df,aes(x=start,xend=end,y=k,yend=k,label=diff)) + 
+#   theme_bw() +
+#   geom_segment(size=8,color="grey") +
+#   labs(x="Fraction of high frequency variance",y="k") +
+#   xlim(0,0.6) +
+#   geom_label(x = 0.55, size=4)
+# tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/figXX_gantt_highfreq_threholdpeak.tiff', units="in", width=4, height=3.5, res=300)
+# g <- list(gantt1,gantt2)
+# do.call(grid.arrange,c(g,ncol=2))
+# dev.off()
+# rm(start,end,i,df,gantt1,gantt2,g)
 
 
 # *************************************** #
@@ -851,6 +1289,12 @@ AUCdat$kval <- factor(AUCdat$kval,levels=rev(levels(unique(AUCdat$kval))))
 # *************************************** #
 head(ts.data)
 ts.data$alphavalue <- as.numeric(as.character(ts.data$alphavalue))
+#plotalpha <- unique(ts.data$alphavalue)[c(1,10,20,30,40,50,60,70,80,90)]
+plotalpha <- c(8.26,7.51,6.36,5.51,4.59,3.31,2.07,1.38,0.97)
+alphas
+#plotalpha <- round(1/(kvals*1.1^2),digits=2)
+round(1/(alphas*1.1^2),digits=2)
+
 varL = as.list(rep(NA,length=length(plotalpha)))
 for(i in 1:length(codNames)){
   dat <- ts.data[ts.data$codNames == codNames[i] & 
@@ -867,24 +1311,173 @@ for(i in 1:length(codNames)){
     vals = dat[dat$alphavalue == plotalpha[b],]$value[rm_first_timesteps:(timesteps-2)] - means[b]
     # sq root the variance & then divide by mean 
     variance[b] <- sqrt(var(vals))/means[b]
+  
   }
-  varL[[i]] <- as.data.frame(cbind(variance,plotalpha,rep(codNames[i],length=length(plotalpha))))
+  varL[[i]] <- as.data.frame(cbind(variance,plotalpha,rep(as.character(codNames[i]),length=length(plotalpha))))
   names(varL[[i]]) <- c("variance","alphavalue","codNames")
 }
 vardat <- do.call(rbind,varL)
 rm(i,b,dat,variance,means,vals) #clean up
+head(vardat)
 vardat$peak <- eigentable[match(vardat$codNames,eigentable$codNames),"mode_age"]
-vardat$kval <- round((1/as.numeric(as.character(vardat$alphavalue))),digits = 2)
+vardat$kval <- round((1/(as.numeric(as.character(vardat$alphavalue))*conLEP^2)),digits = 2)
 vardat$codNames_plot <- eigentable[match(vardat$codNames,eigentable$codNames),"codNames_plot"]
+vardat$cvs <- eigentable[match(vardat$codNames,eigentable$codNames),"cvs_mode"]
+vardat$maxage <- eigentable[match(vardat$codNames,eigentable$codNames),"max_ages"]
+vardat$codNames_plot_no_maxage <- paste(vardat$codNames_plot,"(",vardat$maxage,")",sep="")
+#vardat$peakovermax <- round(vardat$peak/vardat$maxage,digits=2)
+#vardat$codNames_plot_no_peakovermax <- paste(vardat$codNames_plot,"(",vardat$peakovermax," p/m)",sep="")
+
 # set k slopes to factor, order by increasing slope
 vardat$kval <- factor(vardat$kval,levels=unique(vardat$kval))
-#vardat$kval <- factor(vardat$kval,levels=rev(levels(unique(vardat$kval))))
-# make sure cv values are numeric
+
+# make sure variance values are numeric
 vardat$variance <- as.numeric(as.character(vardat$variance))
-# set codNames factor levels to increase with peak age
-vardat$codNames_plot <- factor(vardat$codNames_plot,levels=codNames_ordered_by_peak_plot)
+
+# set codNames factor levels to increase with peak age OR CV
+#vardat$codNames_plot <- factor(vardat$codNames_plot,levels=codNames_ordered_by_peak_plot)
+codNames_ordered_by_cvs_plot <- eigentable %>% arrange(cvs_mode,codNames) %>% pull(codNames_plot)
+codNames_ordered_by_cvs <- eigentable %>% arrange(cvs_mode,codNames) %>% pull(codNames)
+
 # set codNames in order of peak spawning age
-vardat$codNames <- factor(vardat$codNames,levels=codNames_ordered_by_peak)
+vardat$codNames <- factor(vardat$codNames,levels=codNames_ordered_by_cvs)
+vardat$codNames_plot <- factor(vardat$codNames_plot,levels=codNames_ordered_by_cvs_plot)
+
+# create codNames col ordered by CV
+vardat$cvs <- round(vardat$cvs,digits=2) #round off cv values
+vardat$codNames_plot_no <- paste(vardat$codNames_plot,"(",vardat$cvs,")",sep="") #new col w/codName+cv
+codNames_plot_no_order <- unique(vardat$codNames_plot_no) #creating factor levels for new names
+codNames_plot_no_order <- factor(codNames_plot_no_order,levels=unique(vardat[order(vardat$cvs),]$codNames_plot_no),ordered=TRUE)
+vardat$codNames_plot_no <- factor(vardat$codNames_plot_no,levels=levels(codNames_plot_no_order))
+# create codNames col ordered by peak
+vardat$codNames_plot_no_peak <- paste(vardat$codNames_plot,"(",vardat$peak,")",sep="") #new col w/codName+peak
+codNames_plot_no_peak_order <- unique(vardat$codNames_plot_no_peak)
+codNames_plot_no_peak_order <- factor(codNames_plot_no_peak_order,levels=unique(vardat[order(vardat$peak),]$codNames_plot_no_peak))
+vardat$codNames_plot_no_peak <- factor(vardat$codNames_plot_no_peak,levels=levels(codNames_plot_no_peak_order))
+# set codNames in order of max age
+codNames_plot_max_order <- unique(vardat$codNames_plot_no_maxage)
+codNames_plot_max_order <- factor(codNames_plot_max_order,
+                                  levels=unique(vardat[order(vardat$maxage),]$codNames_plot_no_maxage))
+vardat$codNames_plot_no_maxage <- factor(vardat$codNames_plot_no_maxage,
+                                         levels=levels(codNames_plot_max_order))
+# set codNames in order of peakovermax
+#codNames_plot_peakovermax_order <- unique(vardat$codNames_plot_no_peakovermax)
+#codNames_plot_peakovermax_order <- factor(codNames_plot_peakovermax_order,
+#                                          levels=unique(vardat[order(vardat$peakovermax),]$codNames_plot_no_peakovermax))
+#vardat$codNames_plot_no_peakovermax <- factor(vardat$codNames_plot_no_peakovermax,
+#                                              levels=levels(codNames_plot_peakovermax_order))
+
+
+# **********************************
+# Plot 1: lambda1 v total variance 
+# Plot 2: lambda2/1 v fraction high freq var
+# **********************************
+
+# Plot 1
+# Merge AUCdat and eigendata dfs based on codNames & kval
+totalvarL <- as.list(rep(NA,length=length(selectedkvals)))
+for(i in 1:length(selectedkvals)){
+
+  vardat1 <- vardat %>% filter(kval %in% selectedkvals[i]) 
+  vardat1$kval <- factor(vardat1$kval)
+  vardat1$codNames <- as.character(vardat1$codNames)
+  #str(vardat1)
+  
+  eigendata1 <- eigendata %>% 
+    filter(kvals %in% selectedkvals[i] & eigen=="e1") %>% 
+    select(kvals,codNames,value,eigen)
+  colnames(eigendata1)[which(names(eigendata1) == "kvals")] <- "kval"
+  colnames(eigendata1)[which(names(eigendata1) == "value")] <- "value_e1"
+  eigendata1$kval <- factor(eigendata1$kval)
+  
+  vardat1$value_e1 <- eigendata1[match(vardat1$codNames,eigendata1$codNames),"value_e1"]
+  #plot(y=vardat1$variance,x=vardat1$value_e1)
+  totalvarL[[i]] <- vardat1
+}
+totalvardf <- bind_rows(totalvarL,id=NULL)
+rm(eigendata1,vardat1)
+head(totalvardf)
+
+# get R^2 info for each k val
+#e1vTV.rsq <- rep(NA,length=length(selectedkvals))
+for(n in 1:length(selectedkvals)){
+  dd <- totalvardf[totalvardf$kval == selectedkvals[n],]
+  e1vTV.rsq[n] <- round(summary(lm(variance ~ value_e1,dd))$r.squared,digits=2)
+}
+# format r squared values for plotting
+dat_rsq <- data.frame(lab=paste("",as.character(e1vTV.rsq)),
+                      kval=unique(totalvardf$kval))
+p1 <- ggplot(data=totalvardf,aes(x=value_e1,y=variance)) +
+  geom_point() + 
+  geom_smooth(method="lm",se=FALSE,color="black") +
+  facet_grid(. ~ kval) +
+  #scale_y_continuous(limits=c(0,1.1)) +
+  geom_text_repel(data=totalvardf,
+                  aes(label = codNames),
+                  segment.color = "grey",
+                  size = 2,
+                  na.rm = TRUE) +
+  #geom_text(data=dat_rsq,mapping=aes(x=0.8,y=0.3,label=lab)) +
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.title.y = element_text(angle = 90)) +
+  ylab(expression(paste(sigma,"/","m"))) +
+  xlab(expression(paste(lambda[1]))) 
+  #ylab(expression(paste(abs(lambda[2])/lambda[1]))) +
+  #ylim(0.5,1.01)
+
+rm(n,dd)
+
+
+
+
+# Plot 2
+# Merge AUCdat and eigendata dfs based on codNames & kval
+eigendata1 <- eigendata %>% 
+  filter(kvals %in% selectedkvals & eigen=="e12") %>% 
+  select(kvals,codNames,value,eigen)
+colnames(eigendata1)[which(names(eigendata1) == "kvals")] <- "kval"
+colnames(eigendata1)[which(names(eigendata1) == "value")] <- "value_e12"
+eigendata1$kval <- as.factor(eigendata1$kval)
+AUCdat1 <- AUCdat %>% 
+  filter(kval %in% selectedkvals & AUCdes=="percent")
+AUCdat1$kval <- as.numeric(as.character(AUCdat1$kval))
+eigendata1$kval <- as.numeric(as.character(eigendata1$kval))
+AUC_e12 <- left_join(AUCdat1,eigendata1,all.x=TRUE)
+rm(eigendata1,AUCdat1)
+head(AUC_e12)
+
+p2 <- ggplot(data=AUC_e12,aes(x=value_e12,y=value)) +
+  geom_point() + 
+  geom_smooth(method="lm",se=FALSE,color="black") +
+  facet_grid(. ~ kval) +
+  #scale_y_continuous(limits=c(0,1.1)) +
+  geom_text_repel(data=AUC_e12,
+                  aes(label = codNames),
+                  segment.color = "grey",
+                  size = 2,
+                  na.rm = TRUE) +
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.title.y = element_text(angle = 90)) +
+  ylab("Fraction of high frequency variance") +
+  xlab(expression(paste(abs(lambda[2])/lambda[1]))) 
+
+e12vDR.rsq <- rep(NA,length=length(selectedkvals))
+for(n in 1:length(selectedkvals)){
+  dd <- AUC_e12[AUC_e12$kval == selectedkvals[n],]
+  e12vDR.rsq[n] <- summary(lm(value ~ value_e12,dd))$r.squared
+}
+rm(n,dd)
+#ylab(expression(paste(abs(lambda[2])/lambda[1]))) +
+#ylim(0.5,1.01)
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript3/fig6_eigens_vs_simoutput_sigR0.3_span1.5_oneoverpeakhighfreq.tiff', units="in", width=6, height=9, res=300) 
+p12 <- list(p1,p2)
+do.call(grid.arrange,c(p12,ncol=1))
+dev.off()
+rm(p12,p1,p2)
 
 # get range of total variance at least depleted (k=0.1)
 max.var.k0.1 <- max(vardat[vardat$kval == 0.1,]$variance)
@@ -892,95 +1485,253 @@ min.var.k0.1 <- min(vardat[vardat$kval == 0.1,]$variance)
 # get range of total variance at most depleted (k=0.9)
 max.var.k0.9 <- max(vardat[vardat$kval == 0.91,]$variance)
 min.var.k0.9 <- min(vardat[vardat$kval == 0.91,]$variance)
+head(vardat)
 
-
-fig5a <- ggplot(vardat,aes(x=kval,y=codNames)) +
-  geom_raster(aes(fill=variance)) + 
+# ************************
+# Average pops with same peak age in vardat & AUCdat
+# ************************
+head(vardat)
+ks <- round(1/alphas,digits=1)
+peaks <- sort(unique(eigentable$mode_age),decreasing=FALSE) #peak ages of pops
+codNames_peakavg <- c("peak_avg_3","peak_avg_4","peak_avg_5","Coas_6","peak_avg_8","NE_Arctic_9")
+var_meansL <- as.list(rep(NA,length=length(ks)))
+names(var_meansL) <- ks
+for(i in 1:length(ks)){
+  var_means <- rep(NA,length=length(peaks))
+  for(j in 1:length(peaks)){
+    var_means[j] <- mean(vardat[vardat$kval==ks[i] & vardat$peak==peaks[j],]$variance)
+  }
+  kval <- rep(ks[i],length=length(peaks))
+  store <- as.data.frame(cbind(codNames_peakavg,peaks,var_means,kval))
+  var_meansL[[i]]<-store
+  rm(kval,store,var_means)
+}
+var_meansdf <- bind_rows(var_meansL,id=NULL)
+var_meansdf$var_means <- as.numeric(var_meansdf$var_means)
+var_meansdf$codNames_peakavg <- factor(var_meansdf$codNames_peakavg,
+                                         levels=c("peak_avg_3","peak_avg_4","peak_avg_5",
+                                                  "Coas_6","peak_avg_8","NE_Arctic_9"))
+fig5a_avg <- ggplot(var_meansdf,aes(x=kval,y=codNames_peakavg)) +
+  geom_raster(aes(fill=var_means)) + 
   xlab("Slope on S-R curve (k)") + ylab("") +
   scale_fill_gradient(low="purple", high="orange") + 
   theme_classic() +
-  guides(fill=guide_legend(title="Total variance", reverse=TRUE)) +
+  guides(fill=guide_legend(title="Standard deviation\n normalized to the mean", reverse=FALSE)) +
   theme(axis.text.x = element_text(angle = 70, hjust = 1),
         legend.position = "top",
         legend.title = element_text(size = 8), 
-        legend.text = element_text(size = 8))
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig5a_totalvar_sigR0.3.tiff', units="in", width=4, height=6, res=300) 
-fig5a
-dev.off()
-# (Fig 5b) Percent at low frequencies for different k values
+        legend.text = element_text(size = 8)) +
+  ylab("ordered by peak")
+# average populations in AUCdat
+head(AUCdat)
+ks <- round(1/alphas,digits=1)
+peaks <- sort(unique(eigentable$mode_age),decreasing=FALSE) #peak ages of pops
+codNames_peakavg <- c("peak_avg_3","peak_avg_4","peak_avg_5","Coas_6","peak_avg_8","NE_Arctic_9")
+auc_meansL <- as.list(rep(NA,length=length(ks)))
+names(auc_meansL) <- ks
+for(i in 1:length(ks)){
+  auc_means <- rep(NA,length=length(peaks))
+  for(j in 1:length(peaks)){
+    auc_means[j] <- mean(AUCdat[AUCdat$kval==ks[i] & AUCdat$peak==peaks[j] & AUCdat$AUCdes=="percent",]$value)
+  }
+  kval <- rep(ks[i],length=length(peaks))
+  store <- as.data.frame(cbind(codNames_peakavg,peaks,auc_means,kval))
+  auc_meansL[[i]]<-store
+  rm(kval,store,auc_means)
+}
+auc_meansdf <- bind_rows(auc_meansL,id=NULL)
+auc_meansdf$auc_means <- as.numeric(auc_meansdf$auc_means)
+auc_meansdf$codNames_peakavg <- factor(auc_meansdf$codNames_peakavg,
+                                       levels=c("peak_avg_3","peak_avg_4","peak_avg_5",
+                                                "Coas_6","peak_avg_8","NE_Arctic_9"))
 
-# order pops by peak
-AUCdat$codNames <- factor(AUCdat$codNames, 
-                          levels=unique(AUCdat$codNames[order(AUCdat$peak)]))
-plotalpha <- c(10,5,3.3,2.5,2,1.7,1.4,1.2,1.1)
-# FIG 5E: Percent of AUC at low frequencies for different k values
-dataforplot <- AUCdat[AUCdat$AUCdes == "perlow" &
-                        AUCdat$alphaval %in% plotalpha,]
-# get range of % low freq variance when populations are not depleted:
+fig5b_avg <- ggplot(auc_meansdf,aes(x=kval,y=codNames_peakavg)) +
+  geom_raster(aes(fill=auc_means)) + 
+  xlab("Slope on S-R curve (k)") + ylab("") +
+  scale_fill_gradient(low="purple", high="orange") + 
+  theme_classic() +
+  guides(fill=guide_legend(title="High frequency variance\n(fraction range 0.06-0.5)", reverse=FALSE)) +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1),
+        legend.position = "top",
+        legend.title = element_text(size = 8), 
+        legend.text = element_text(size = 8)) +
+  ylab("ordered by peak")
+rm(auc_means,i,j,auc_meansL)
+
+# bar chart for averaged pops
+auc_meansdf
+diffs <- rep(NA,length=length(codNames_peakavg))
+for(i in 1:length(unique(auc_meansdf$codNames_peakavg))){
+  diffs[i] <- auc_meansdf[auc_meansdf$codNames_peakavg == unique(auc_meansdf$codNames_peakavg)[i] &
+  auc_meansdf$kval == 0.1,]$auc_means - auc_meansdf[auc_meansdf$codNames_peakavg == unique(auc_meansdf$codNames_peakavg)[i] & auc_meansdf$kval == 0.9,]$auc_means
+  
+}
+diffsdf <- as.data.frame(cbind(codNames_peakavg,peaks,diffs))
+diffsdf$codNames_peakavg <- factor(diffsdf$codNames_peakavg,
+                                       levels=c("peak_avg_3","peak_avg_4","peak_avg_5",
+                                                "Coas_6","peak_avg_8","NE_Arctic_9"))
+diffsdf$diffs <- as.numeric(as.character(diffsdf$diffs))
+str(diffsdf)
+
+fig5c_avg <- ggplot(data=diffsdf, aes(x=codNames_peakavg, y=diffs)) + geom_bar(stat="identity") + 
+  theme_classic() +
+  ggtitle("")  +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1)) +
+  coord_flip() +
+  ylab("Change in the fraction of high freq\n variance as k goes from 0.1-0.9 ") + 
+  xlab("") 
+
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig5abc_peak_avg_2T_sigR0.3_span1.5.tiff', units="in", width=11, height=6, res=300) 
+p <- list(fig5a_avg,fig5b_avg,fig5c_avg)
+do.call(grid.arrange,c(p,ncol=3))
+dev.off()
+rm(fig5a_avg,fig5b_avg,fig5c_avg)
+# ************************
+# Plot total var at different k vals
+# ************************
+fig5a <- ggplot(vardat,aes(x=kval,y=codNames_plot_no)) +
+  geom_raster(aes(fill=variance)) + 
+  xlab("Slope on egg-recruit curve at equilibrium (k)") + ylab("") +
+  scale_fill_gradient(low="purple", high="orange") + 
+  theme_classic() +
+  guides(fill=guide_legend(title="Standard deviation\nnormalized to the mean", reverse=FALSE)) +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1),
+        legend.position = "top",
+        plot.title = element_text(hjust = -0.5, vjust=-0.1),
+        legend.title = element_text(size = 8), 
+        legend.text = element_text(size = 8)) +
+  ylab("Cod populations")
+
+# tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig5a_separate_kvals_sigR0.3_span1.5.tiff', units="in", width=11, height=6, res=300) 
+# p <- list(fig5a0.1,fig5a0.4,fig5a0.6,fig5a0.9)
+# do.call(grid.arrange,c(p,ncol=4))
+# dev.off()
+
+
+# (Fig 5b) Percent at high or low frequencies for different k values
+# could be high or low depending on if we used > or =<
+dataforplot <- AUCdat[AUCdat$AUCdes == "percent",]
+
+# get range of % when slope is small:
 min.per.k0.1 <- min(dataforplot[dataforplot$kval == 0.1,]$value)
 max.per.k0.1 <- max(dataforplot[dataforplot$kval == 0.1,]$value)
-# get range of % high freq variance when pops are not depleted:
-max.per.k.01high <- 1-min.per.k0.1
-min.per.k.01high <- 1-max.per.k0.1
-# get range of % low freq variance when populations are most depleted:
+
+# get range of % when slope is big:
 min.per.k0.9 <- min(dataforplot[dataforplot$kval == 0.91,]$value)
 max.per.k0.9 <- max(dataforplot[dataforplot$kval == 0.91,]$value)
-# get range of % high freq variance when pops are most depleted:
-max.per.k0.9high <- 1-min.per.k0.9
-min.per.k0.9high <- 1-max.per.k0.9
 
-fig5b <- ggplot(data=dataforplot,aes(x=kval,y=codNames)) +
+fig5b <- ggplot(data=dataforplot,aes(x=kval,y=codNames_plot_no)) +
   geom_raster(aes(fill=value)) + 
-  xlab("Slope on S-R curve (k)") + ylab("") + 
+  xlab("Slope on egg-recruit curve at equilibrium (k)") + ylab("") + 
   scale_fill_gradient(low="purple", high="orange") + 
   scale_colour_gradient(limits = c(0, 1)) +
   theme_classic() +
-  guides(fill=guide_legend(title="Low frequency variance\n(% range 0.52-0.99)")) +
+  guides(fill=guide_legend(title=paste("High frequency variance\n(fraction range 0.06-0.5)"))) +
   theme(axis.text.x = element_text(angle = 70, hjust = 1),
         legend.position="top",
-        plot.title = element_text(hjust = -0.1, vjust=-0.1),
+        plot.title = element_text(hjust = -0.5, vjust=-0.1),
         legend.title = element_text(size = 8), 
         legend.text = element_text(size = 8)) 
   
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig5b_lowvar_sigR0.3.tiff', units="in", width=4, height=6, res=300) 
-fig5b
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript3/fig5ab_highvar_CVorder_sigR0.3_span1.2.tiff', units="in", width=9, height=6, res=300) 
+f <- list(fig5a,fig5b)
+do.call(grid.arrange,c(f,ncol=2))
 dev.off()
-# calculate difference in % of low frequency variance when 
+
+
+# calculate difference in fraction variance when 
 # k=0.9 (alpha=1.1) vs k=0.1 (alpha=10)
-pervar_k0.1 <- AUCdat[AUCdat$AUCdes == "perlow" & AUCdat$alphaval == 10,]
-pervar_k0.91 <- AUCdat[AUCdat$AUCdes == "perlow" & AUCdat$alphaval == 1.1,]
+pervar_k0.1 <- AUCdat[AUCdat$AUCdes == "percent" & AUCdat$alphaval == 10,]
+pervar_k0.91 <- AUCdat[AUCdat$AUCdes == "percent" & AUCdat$alphaval == 1.1,]
 diff <- rep(NA,length=length(codNames_ordered_by_peak))
+
 for(d in 1:length(codNames_ordered_by_peak)){
-  
-  diff[d] <- round(AUCdat[AUCdat$AUCdes == "perlow" & AUCdat$alphaval == 1.1 & AUCdat$codNames==codNames_ordered_by_peak[d],]$value - AUCdat[AUCdat$AUCdes == "perlow" & AUCdat$alphaval == 10 & AUCdat$codNames==codNames_ordered_by_peak[d],]$value, digits = 2)
-  
+    diff[d] <- round(AUCdat[AUCdat$AUCdes == "percent" & AUCdat$alphaval == 10 & AUCdat$codNames==codNames_ordered_by_peak[d],]$value - AUCdat[AUCdat$AUCdes == "percent" & AUCdat$alphaval == 1.1 & AUCdat$codNames==codNames_ordered_by_peak[d],]$value, digits = 2)
 }
 diffdata <- as.data.frame(cbind(rev(codNames_ordered_by_peak),rev(diff)))
-names(diffdata) <- c("codNames_ordered_by_peak","diff")
-diffdata$codNames_ordered_by_peak <- factor(diffdata$codNames_ordered_by_peak,
-                                            levels=codNames_ordered_by_peak)
+names(diffdata) <- c("codNames","diff")
 diffdata$diff <- as.numeric(as.character(diffdata$diff))
 
-# try averaging the difference in % populations with the same peak age
-diffdata$peak <- eigentable[match(diffdata$codNames_ordered_by_peak,eigentable$codNames),"mode_age"]
-plot(diffdata %>% group_by(peak) %>% summarise(avg = mean(diff)))
+# add columns
+diffdata$cvs <- round(eigentable[match(diffdata$codNames,eigentable$codNames),"cvs_mode"],digits=2)
+diffdata$peak <- eigentable[match(diffdata$codNames,eigentable$codNames),"mode_age"]
+diffdata$codNames_plot <- eigentable[match(diffdata$codNames,eigentable$codNames),"codNames_plot"]
+diffdata$maxage <- eigentable[match(diffdata$codNames,eigentable$codNames),"max_ages"]
+#diffdata$peakovermax <- round(diffdata$peak/diffdata$maxage, digits=2)
+diffdata$codNames_peak <- paste(diffdata$codNames_plot,"(",diffdata$peak,")",sep="")
+diffdata$codNames_cv <- paste(diffdata$codNames_plot,"(",diffdata$cv,")",sep="")  
+diffdata$codNames_max <- paste(diffdata$codNames_plot,"(",diffdata$maxage,")",sep="")
+#diffdata$codNames_peakovermax <- paste(diffdata$codNames_plot,"(",diffdata$peakovermax," p/m)",sep="")
 
-fig5c <- ggplot(data=diffdata, aes(x=codNames_ordered_by_peak, y=diff)) + geom_bar(stat="identity") + 
-  scale_y_continuous(limits = c(0,0.17)) +
+# set factor levels
+diffdata$codNames_peak <- factor(diffdata$codNames_peak,levels=levels(codNames_plot_no_peak_order))
+diffdata$codNames_cv <- factor(diffdata$codNames_cv,levels=levels(codNames_plot_cvs_order))
+diffdata$codNames_max <- factor(diffdata$codNames_max,levels=levels(codNames_plot_max_order))
+#diffdata$codNames_peakovermax <- factor(diffdata$codNames_peakovermax,levels=levels(codNames_plot_peakovermax_order))
+
+# plot diffdata barplot
+fig5c <- ggplot(data=diffdata, aes(x=codNames_cv, y=diff)) + geom_bar(stat="identity") + 
   theme_classic() +
-  ggtitle("") +
-  xlab("Percent") + ylab("") +
+  ggtitle("")  +
   theme(axis.text.x = element_text(angle = 70, hjust = 1)) +
-  coord_flip() 
+  coord_flip() +
+  ylab("Difference in fraction of\n high frequency variance") + 
+  xlab("") 
 
-tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig5c_bars_sigR0.3.tiff', units="in", width=4, height=6, res=300) 
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript2/fig7abc_highvar_CVorder_sigR0.3_span1.5.tiff', units="in", width=9, height=6, res=300) 
+f <- list(fig5a,fig5b)
+do.call(grid.arrange,c(f,ncol=2))
+dev.off()
+rm(fig5a,fig5b,fig5c)
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/fig5c_bars_CVorder_sigR0.3.tiff', units="in", width=4, height=6, res=300) 
 fig5c
 dev.off()
 
+# **************************************
+# --- Average the differences --- #
+# **************************************
+# try averaging the difference in % populations with the same peak age
+diffdata$peak <- eigentable[match(diffdata$codNames_ordered_by_peak,eigentable$codNames),"mode_age"]
+plot(diffdata %>% group_by(peak) %>% summarise(avg = mean(diff)))
+diff.means <- diffdata %>% group_by(peak) %>% summarise(avg = mean(diff))
+# CI for peak ages with multiple populations:
+#peak_need_avg <- unique(diffdata$peak[duplicated(diffdata$peak)])
+peak <- unique(diffdata$peak)
+#error <- rep(NA,length=length(peak_need_avg))
+upper <- rep(NA,length=length(peak_need_avg))
+lower <- rep(NA,length=length(peak_need_avg))
+m <- rep(NA,length=length(peak_need_avg))
+for (p in 1:length(peak_need_avg)){
+  n = length(diffdata[diffdata$peak == peak_need_avg[p],]$diff)
+  m[p] = mean(diffdata[diffdata$peak == peak_need_avg[p],]$diff)
+  sd = sd(diffdata[diffdata$peak == peak_need_avg[p],]$diff)
+  #error = qt(0.975,df=n-1)*sd/sqrt(n)
+  upper[p] = m[p]+(qt(0.975,df=n-1)*sd/sqrt(n))
+  lower[p] = m[p]-(qt(0.975,df=n-1)*sd/sqrt(n))
+}
+upper[is.nan(upper)] <- 0
+lower[is.nan(lower)] <- 0
+diff.means <- as.data.frame(cbind(peak_need_avg,m,upper,lower))
+
+my_breaks = seq(3,9,by=1)
+
+fig5c.avg <- ggplot(data=diff.means, aes(x=peak, y=m)) + 
+  geom_bar(stat="identity") + 
+  geom_errorbar(data=diff.means, mapping=aes(x=peak, ymin=lower, ymax=upper), width=0.2) +
+  scale_y_continuous(limits = c(0,0.18)) +
+  scale_x_continuous(breaks=my_breaks,labels=my_breaks) +
+  theme_classic() +
+  ggtitle("")  +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1)) +
+  coord_flip() +
+  ylab("Difference in percent of\n low frequency variance") + xlab("")
 
 
 
 
+
+
+# ------------------------------------------------------------------------------------------------------
 
 #Instead I could use total AUC to examine variance in time series
 dataforplot <- AUCdat[AUCdat$AUCdes == "total" &

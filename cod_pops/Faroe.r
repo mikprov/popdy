@@ -1,5 +1,5 @@
 # Faroes
-name = "faroes" 
+name = "Faroes" 
 L_inf = 115
 K = 0.190
 B0 = -4.88

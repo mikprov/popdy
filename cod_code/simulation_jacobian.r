@@ -13,8 +13,8 @@
 set.seed(2)
 
 
-toprow <- c(0.01,0.01,0.1,0.2,0.32,0.36)
-toprow <- toprow * 0.001
+toprow <- c(0.1,0.1,0.2,0.4,0.6,0.9)
+toprow <- toprow * 0.01
 sum(toprow) #should equal 1
 length(toprow) #num age classes
 
@@ -26,7 +26,7 @@ jac[4,3]<-1
 jac[5,4]<-1
 jac[6,5]<-1
 jac
-eigen(jac) #first eigenvalue is 1
+extract_first_eigen_value(jac) #first eigenvalue is 1
 
 tsteps = 1000
 sig_r = 0.1

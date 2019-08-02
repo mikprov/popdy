@@ -1,5 +1,5 @@
 # S Gulf of St Lawrence
-name = "S Gulf of St Lawrence" 
+name = "S Gulf" 
 L_inf = NA
 K = NA
 B0 = NA

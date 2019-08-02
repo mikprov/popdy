@@ -2,238 +2,179 @@
 # Test Drive Celtic
 # **************** #
 # modify the Celtic Leslie matrix so that peak age is 5, 10
-cel <- Aarray$Celtic[,,1]
-celtop <- cel[1,]
-addages <- c(2,7,22)
-celtopplus <- c(rep(0,length=addages[3]),celtop) 
-celLeslie <- matrix(0,nrow=length(celtopplus),ncol=length(celtopplus))
-celLeslie[1,] <- celtopplus
-for(i in 1:(length(celLeslie[,1])-1)){
-  celLeslie[1+i,i] <- 1
-}
-celarray <- array(NA,dim=c(length(celLeslie[1,]),length(celLeslie[1,]),1))
-celarray[,,1] <- celLeslie
-# replace modified Leslie into Aarray
-Aarray$Celtic <- celarray
-rm(cel,celtop,addages,celtopplus,celLeslie,celarray) #clean up
+#Leslie3d <- Aarray[["Celtic"]]
+#cel <- Leslie3d[,,which(1.0==kvals)[[1]]]
+#celtop <- cel[1,]
+#addages <- c(2,7,22)
+# note: peak age of Celtic is 3, with added ages
+# new peak ages are: 5(3+2), 10(3+7), 25(3+22)
+#celtopplus <- c(rep(0,length=addages[3]),celtop) 
+
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+ynar <-  c(0,0,0,0,0,0,0.05,0.25,0.7)
+ywide <- c(0,0.01,0.01,0.03,0.1,0.1,0.15,0.2,0.4)
+onar <- c(0,0,0,0,0,0,0,0,0,0,0,0,0,0.05,0.25,0.7)
+owide <- c(0,0,0,0,0,0,0,0,0.01,0.01,0.03,0.1,0.1,0.15,0.2,0.4)
+length(ynar)
+length(ywide)
+length(onar)
+length(owide)
+vecs <- list(ynar,ywide,onar,owide)
+names(vecs) <- c("ynar","ywide","onar","owide")
+
+
+yn <- matrix(0,nrow=length(ynar),ncol=length(ynar))
+yn[1,] <- ynar
+yw <- matrix(0,nrow=length(ywide),ncol=length(ywide))
+yw[1,] <- ywide
+on <- matrix(0,nrow=length(onar),ncol=length(onar))
+on[1,] <- onar
+ow <- matrix(0,nrow=length(owide),ncol=length(owide))
+ow[1,] <- owide
+
+for(i in 1:(length(ynar)-1)){yn[1+i,i] <- 1}
+for(i in 1:(length(ywide)-1)){yw[1+i,i] <- 1}
+for(i in 1:(length(onar)-1)){on[1+i,i] <- 1}
+for(i in 1:(length(owide)-1)){ow[1+i,i] <- 1}
+
+LesliesL <- list(yn,yw,on,ow)
+names(LesliesL) <- c("young peak, small Stdev","young peak, wide Stdev","old peak, small Stdev","old peak, wide Stdev")
 
 # set params for simulation:
-timesteps = 1000 #need this now to create
-rm_first_timesteps = 200
-alpha = 1.2
-beta = 10000 # -----> testing different beta values, re-run script from here
-initial_eggs = beta
+timesteps = 2000 #need this now to create
+rm_first_timesteps = 1000
+betas = 1000
+alphas <- selectedalphas
 sig_r = 0.3
 span.multiplier = 1 # adjusting the span in spec.prgm()
-alphas <- rep(alpha, length=length(codNames)) #alpha could be diff for pops
-output.3d.list <- as.list(rep(NA,length=length(codNames))) #store timeseries here
-names(output.3d.list) <- codNames
 
-for (i in 1:length(Aarray)) { #step through each pop
-  Leslie3d = Aarray[[i]] #select the 3d array of Leslie matricies
-  # array dims: row=ts length, col=4 is number of ts (eggs,recruits,Nt,Nsize), depth=F vals
-  output.matrix <- array(NA,c(timesteps-2,4,length(Fvalues))) 
+outputL <- as.list(rep(NA,length=length(LesliesL)))
+
+for (l in 1:length(LesliesL)){ #step through oynw
+  output.matrix <- array(NA,c(timesteps-2,4,length(selectedalphas)))
   
-  for (f in 1:length(Fvalues)) { #step through each Leslie matrix (for each F value)
-    output = sim_model(A=Leslie3d[,,f], timesteps=timesteps, 
-                       alpha=alphas[i], beta=beta, 
-                       sig_r=sig_r, initial_eggs=initial_eggs)
-    
+  for (a in 1:length(alphas)) { #for each oynw, step through alphas
+    output = sim_model(A=LesliesL[[l]], timesteps=timesteps, 
+                     alpha=selectedalphas[a], beta=betas, 
+                     sig_r=sig_r, initial_eggs=betas)
     length(output$Nsize) <- length(output$N_t) #trim Nsize ts vector, -2 elements
-    output.matrix[,,f] <- do.call(cbind,output) #fill in array for pop i
-    #colnames(output.matrix) <- names(output)
-  }
-  output.3d.list[[i]] <- output.matrix
+    output.matrix[,,a] <- do.call(cbind,output) #fill in array for pop i
+    colnames(output.matrix) <- names(output)
+    print(a)
+    }
+  outputL[[l]] <- output.matrix
+  print(l)
 }
-rm(i,f,Leslie3d,output.matrix,output) #clean up
+names(outputL) <- names(LesliesL)
+rm(l,a,output.matrix)
 
-# (3) Format output ts for plotting simulations using output.3d.list
+# Format output ts for plotting simulations using output.3d.list
 variable_type <- c("Nt","eggs","recruits","Nsize")
-# --- reorganize egg timeseries data --- #
-var.number <- 2 # eggs
-df.list <- as.list(rep(NA,length=length(codNames)))
-names(df.list) <- codNames
-for (i in 1:length(output.3d.list)) {
-  # first, reformat data to work with ggplot
-  aa <- as.data.frame(output.3d.list[[i]][,var.number,])
-  aa$year <- seq(from=1, to=length(aa[,1]))
-  colnames(aa) <- c(Fvalues,"year")
-  aa1 <- aa %>% gather(Fval,value,1:length(Fvalues))
-  aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
-  aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
-  df.list[[i]] <- aa1
-  rm(aa1,aa)}
-eggs.ts <- do.call(rbind,df.list)
-rm(df.list,i) #clean up
-
-# --- reorganize recruit timeseries data --- #
 var.number <- 3 # recruits
-df.list <- as.list(rep(NA,length=length(codNames)))
-names(df.list) <- codNames
-for (i in 1:length(output.3d.list)) {
-  # first, reformat data to work with ggplot
-  aa <- as.data.frame(output.3d.list[[i]][,var.number,])
+
+# reformat data to work with ggplot
+tsL <- as.list(rep(NA,length=length(outputL)))
+names(tsL) <- names(outputL)
+for (i in 1:length(outputL)){
+  L <- outputL[[i]]
+  aa <- as.data.frame(L[,var.number,])
   aa$year <- seq(from=1, to=length(aa[,1]))
-  colnames(aa) <- c(Fvalues,"year")
-  aa1 <- aa %>% gather(Fval,value,1:length(Fvalues))
-  aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
-  aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
-  df.list[[i]] <- aa1
-  rm(aa1,aa)}
-recruits.ts <- do.call(rbind,df.list)
-rm(df.list) #clean up
-
-# --- reorganize Nsize timeseries data --- #
-var.number <- 4 # Nsize
-df.list <- as.list(rep(NA,length=length(codNames)))
-names(df.list) <- codNames
-for (i in 1:length(output.3d.list)) {
-  # first, reformat data to work with ggplot
-  aa <- as.data.frame(output.3d.list[[i]][,var.number,])
-  aa$year <- seq(from=1, to=length(aa[,1]))
-  colnames(aa) <- c(Fvalues,"year")
-  aa1 <- aa %>% gather(Fval,value,1:length(Fvalues))
-  aa1$variable <- rep(variable_type[var.number],length=length(aa1[,1]))
-  aa1$codNames <- rep(codNames[i],length=length(aa[,1]))
-  df.list[[i]] <- aa1
-  rm(aa1,aa)}
-nsize.ts <- do.call(rbind,df.list)
-rm(df.list) #clean up
-
-ts.data <- rbind(eggs.ts,recruits.ts,nsize.ts) #combine data
-rownames(ts.data) <- NULL
-
-# Plan:
-# 1. Walk through each cod pop
-# 2. Store spec values for eggs, recruits, and Nsize
-
-# 1. Walk through each cod pop
-sp.eggsL <- as.list(rep(NA,length=length(codNames))) #object for spec analysis  
-sp.recruitL <- as.list(rep(NA,length=length(codNames))) 
-ts.for.spec.eg <- as.list(rep(NA,length=length(codNames)))
-ts.for.spec.re <- as.list(rep(NA,length=length(codNames)))
-
-for (i in 1:length(codNames)){
-  
-  ts <- ts.data[ts.data$codNames == codNames[i],] #subset data for pop i 
-  
-  # setting 'span' - a vector of odd integers to specify the smoothers
-  tmp <- ceiling(sqrt(length(1:(timesteps-rm_first_timesteps-1)))) #sq root of timeseries lgth, rounded
-  if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp} #make it odd, if the square root is even
-  m = m * span.multiplier
-  
-  xx = ts[ts$variable == "eggs",]$value[rm_first_timesteps:(timesteps-2)] - mean(ts[ts$variable == "eggs",]$value[rm_first_timesteps:(timesteps-2)])
-  ts.for.spec.eg[[i]] <- xx #save time series that goes into spec.pgram()
-  sp = spec.pgram(x=xx,spans=c(m,m),plot = FALSE)
-  #save spec output for plotting pops together, Helen Wearing says to multiply by 2
-  sp.eggsL[[i]] <- sp$spec*2
-  rm(xx,sp)
-  
-  yy = ts[ts$variable == "recruits",]$value[rm_first_timesteps:(timesteps-2)] - mean(ts[ts$variable == "recruits",]$value[rm_first_timesteps:(timesteps-2)])
-  ts.for.spec.re[[i]] <- yy #save time series that goes into spec.prgam()
-  sp = spec.pgram(yy,spans=c(m,m),plot = FALSE)
-  sp.recruitL[[i]] = sp$spec*2 # save matrix of spec values for different FLEP, index by pop i
-  rm(yy)
-  
+  colnames(aa) <- c(selectedalphas,"year")
+  aa1 <- aa %>% gather(alphaval,value,1:length(selectedalphas))
+  aa1$variable <- rep(names(outputL)[i],length=length(aa1[,1]))
+  tsL[[i]] <- aa1
 }
-freq <- sp$freq
-sp.eggs <- as.data.frame(do.call(cbind,sp.eggsL))
-sp.recruit <- as.data.frame(do.call(cbind,sp.recruitL))
-names(sp.eggs) <- codNames
-names(sp.recruit) <- codNames
-sp.eggs$freq <- freq
-sp.recruit$freq <- freq
+rm(L,aa,i,aa1)
+names(tsL) <- names(LesliesL)
 
-# Plan
-# 1. re-arrange dataframes for plotting (sp.eggs, sp.recruit)
-# 2. combine 2 variable type data frames to make one df 
-# 3. plot
+span.multiplier= 1
 
-# 1. re-arrange egg & recruit dataframes
-egglong <- sp.eggs %>% gather("codNames","value",1:length(codNames))
-egglong$variable.type <- rep("eggs",length=length(egglong$freq))
-head(egglong)
-recruitlong <- sp.recruit %>% gather("codNames","value",1:length(codNames))
-recruitlong$variable.type <- rep("recruit",length=length(recruitlong$freq))
-head(recruitlong)
-# 2. combine 2 variable type data frames to make one df 
-specdatalong <- rbind(egglong,recruitlong)
-head(specdatalong)
+# setting 'span' - a vector of odd integers to specify the smoothers
+tmp <- ceiling(sqrt(length(1:(timesteps-rm_first_timesteps-1)))) #sq root of timeseries lgth, rounded
+if (tmp %% 2 == 0) {m <- tmp+1} else {m <- tmp} #make it odd, if the square root is even
+m = m * span.multiplier
+  
+# spectral analysis on RECRUIT, loop over tsL
+spsaveL <- as.list(rep(NA,length=length(tsL)))
+for(i in 1:length(tsL)){ #step through yonw
+  aa1 <- tsL[[i]]
+  spL <- list(rep(NA,length=length(selectedalphas))) #put spec in here
+  
+  for (b in 1:length(selectedalphas)){
+    y = aa1[aa1$alphaval == selectedalphas[b],]$value[rm_first_timesteps:(timesteps-2)]
+    yy = y-mean(y)
+    sp = spec.pgram(yy,spans=c(m,m),taper=0.1,plot = FALSE)
+    spL[[b]] = 2*sp$spec # save matrix of spec values for different FLEP, index by pop i
+    print(b)
+  }
+  spdf <- bind_cols(spL)
+  names(spdf) <- c('1.1','1.4','2','3.3','10')
+  spdf$variable <- rep(names(tsL)[i],length=spdf[,1])
+  spdf$freq <- sp$freq
+  spsaveL[[i]] <- spdf
+}
+rm(i,b,spL,aa1,sp,yy)
+spsave <- bind_rows(spsaveL)
+spsavelong <- spsave %>% gather(alphavalue, value, 1:length(selectedalphas))
+head(spsavelong)
 
-# 3. save specdatalong for each variation of Celtic Leslie matrix
-specdatalong3 
-specdatalong5 
-specdatalong10 
-specdatalong25 
-# add peak age column
-specdatalong3$peak <- rep(3,length=length(specdatalong3$freq))
-specdatalong5$peak <- rep(5,length=length(specdatalong5$freq))
-specdatalong10$peak <- rep(10,length=length(specdatalong10$freq))
-specdatalong25$peak <- rep(25,length=length(specdatalong25$freq))
+# --- recruits spectra --- #
+cs <- scales::seq_gradient_pal("#bdd7e7", "#08519c", "Lab")(seq(0,1,length.out=length(selectedalphas)))
+pp <- as.list(rep(NA,length=length(LesliesL)))
+str(spsavelong)
+spsavelong$alphavalue <- as.numeric(as.character(spsavelong$alphavalue))
+spsavelong$kval<- round((1/spsavelong$alphavalue),digits=2)
+spsavelong$alphavalue <- factor(spsavelong$alphavalue)
+spsavelong$kval <- factor(spsavelong$kval)
+
+for(i in 1:length(LesliesL)){
+
+  df <- spsavelong[spsavelong$variable == names(LesliesL)[i],]
+  
+  pp[[i]] <- ggplot(data=df, aes(x=freq,y=log(value),group=alphavalue)) + 
+    geom_line(aes(color=kval)) + 
+    theme_classic() + ylab("") + xlab("") + 
+    scale_colour_manual(values=cs) +
+    ggtitle(names(LesliesL)[i]) +
+    theme(plot.title = element_text(size = 10)) 
+}
+tiff(file='C:/Users/provo/Documents/GitHub/popdy/cod_figures/manuscript/Test_drive_young-old_wide-narrow.tiff', units="in", width=6, height=5.5, res=300) 
+do.call(grid.arrange,c(pp,ncol=2))
+dev.off()
+# -------------- AUC ------------------
+freq <- spsavelong[1,1]
+#threshold for high/low frequencies is 1/(2T) 
+newpeak = 3 + addages[3]
+AUC_less_L <- as.list(rep(NA,length=length(selectedalphas)))
+AUCperlow_L <- as.list(rep(NA,length=length(selectedalphas)))
+AUC_total_L <- as.list(rep(NA,length=length(selectedalphas)))
+
+names(AUC_less_L) <- as.character(selectedalphas)
+names(AUC_total_L) <- selectedalphas
+names(AUCperlow_L) <- selectedalphas
+
+for (j in 1:length(selectedalphas)){ #for each alpha (ie kval)...
+  
+  
+  AUC_less[j] <- sum(freq*spsavelong[spsavelong$alphavalue == selectedalphas[j] 
+                                         & spsavelong$freq <= (1/(25*2)),]$value)
+    
+    AUC_total[j] <- sum(freq*spsavelong[spsavelong$alphavalue == selectedalphas[j],]$value)
+    AUCperlow[j] <- AUC_less[i]/AUC_total[i]
+    
+  }
+
+rm(i,j)
+AUC_less_df <- data.frame(do.call(cbind,AUC_less_L))
+AUC_total_df <- data.frame(do.call(cbind,AUC_total_L))
+AUCperlow_df <- data.frame(do.call(cbind,AUCperlow_L))
+
+AUC_less_df$codNames <- codNames_ordered_by_peak
+AUC_total_df$codNames <- codNames_ordered_by_peak
+AUCperlow_df$codNames <- codNames_ordered_by_peak
 
 
-# combine specdatalong dfs
-specdatalong <- rbind(specdatalong3,specdatalong5,specdatalong10,specdatalong25)
-specdatalong$peak <- factor(specdatalong$peak)
-levels(specdatalong$peak)
-
-specdatalong3510_x2 
-specdatalong3510 
-specdatalong3510_span3 <- specdatalong
-specdatalong351025 <- specdatalong
-
-specdatalong <- specdatalong351025
-
-# probability of spawning
-source(file = paste('C:/Users/provo/Documents/GitHub/popdy/cod_pops/',"Celtic", '.r', sep=''))
-# calculate LEP at each age
-lsb.at.k = calculate_LSB_at_age_by_F(maxage=maxage,L_inf=L_inf,K=K,TEMP=TEMP,
-                                     F.halfmax=0,B0=B0,B1=B1)
-Ages = seq(from=1,to=length(lsb.at.k[,1]),by=1)
-# calculate probability of spawning at age
-p_spawn = as.data.frame(lsb.at.k[,1] / sum(lsb.at.k[,1])) 
-colnames(p_spawn) <- "p_spawn"
-p_spawnT= cbind(p_spawn,Ages)
-# additional rows for adjusting peak age
-addspeak5 <- as.data.frame(cbind(rep(0,length=2),rep(0,length=2)))
-addspeak10 <- as.data.frame(cbind(rep(0,length=7),rep(0,length=7)))
-addspeak25 <- as.data.frame(cbind(rep(0,length=22),rep(0,length=22)))
-names(addspeak5) <- c("p_spawn","Ages")
-names(addspeak10) <- c("p_spawn","Ages")
-names(addspeak25) <- c("p_spawn","Ages")
-# create dfs for 3,5,10 -- for plotting
-p_spawn3 <- p_spawnT
-p_spawn3$peak <- rep(3,length=length(p_spawn3$p_spawn))
-p_spawn5 <- rbind(addspeak5,p_spawnT)
-p_spawn5$Ages <- seq(from=1,to=length(p_spawn5$p_spawn),by=1)
-p_spawn5$peak <- rep(5,length=length(p_spawn5$p_spawn))
-
-p_spawn10 <- rbind(addspeak10,p_spawnT)
-p_spawn10$Ages <- seq(from=1,to=length(p_spawn10$p_spawn),by=1)
-p_spawn10$peak <- rep(10,length=length(p_spawn10$p_spawn))
-
-p_spawn25 <- rbind(addspeak25,p_spawnT)
-p_spawn25$Ages <- seq(from=1,to=length(p_spawn25$p_spawn),by=1)
-p_spawn25$peak <- rep(25,length=length(p_spawn25$p_spawn))
-
-p_spawnplot <- rbind(p_spawn3,p_spawn5,p_spawn10,p_spawn25)
-p_spawnplot$peak <- factor(p_spawnplot$peak)
-spawnplot <- ggplot(data=p_spawnplot,aes(x=Ages,y=p_spawn,color=peak)) +
-  geom_line() + ggtitle("Celtic probability of spawning at age")
-
-# 3. plot frequency content of eggs
-
-# --- recruits spectra: all on one plot ---#
-dataforplot <- specdatalong[specdatalong$variable.type == "recruit" &
-                              specdatalong$codNames == "Celtic",]
-c <- ggplot(dataforplot, aes(x=freq,y=value,color=peak)) +
-  geom_line() + geom_vline(xintercept = c(1/3,1/5,1/10),linetype="dashed") +
-  ggtitle("Celtic test drive: peak age at 3, 5, 10") + ylab("value")
-
-clog <- ggplot(dataforplot, aes(x=freq,y=log10(value),color=peak)) +
-  geom_line() + geom_vline(xintercept = c(1/3,1/5,1/10),linetype="dashed") +
-  ggtitle("Celtic test drive: peak age at 3, 5, 10") + ylab("log(value)")
-
-clist <- list(c,clog,spawnplot)
-do.call(grid.arrange,c(clist,ncol=1))
 

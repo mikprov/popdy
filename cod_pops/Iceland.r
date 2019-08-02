@@ -1,5 +1,5 @@
 # Iceland
-name = "iceland" 
+name = "Iceland" 
 L_inf = 149
 K = 0.121
 B0 = -6.69

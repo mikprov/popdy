@@ -1,5 +1,5 @@
 # N Gulf of St Lawrence
-name = "N Gulf of St Lawrence" 
+name = "N Gulf" 
 L_inf = 110
 K = 0.160
 B0 = -7.66

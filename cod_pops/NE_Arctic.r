@@ -1,5 +1,5 @@
 # NE Arctic
-name = "nearctic" 
+name = "NE Arctic" 
 L_inf = 134
 K = 0.109
 B0 = -7.45

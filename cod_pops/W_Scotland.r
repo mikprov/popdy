@@ -1,5 +1,5 @@
 # West Scotland
-name = "westscotland" 
+name = "W Scotland" 
 L_inf = 105
 K = 0.16
 B0 = -5.78

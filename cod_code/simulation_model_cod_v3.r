@@ -27,11 +27,18 @@ sim_model <- function(A,timesteps,alpha,beta,sig_r,initial_eggs) {
     #Initialize vector of population sizes with extra 
     #rows for egg production (top value in age vector) & 
     #recruitment before variability (output from BH)
+  # Nt[,1] = N0 #Put in initial values
+  # Nt[,2] = A %*% Nt[,1]  # multiply initial age vector with Leslie to get 2nd age vector
+  # eggs = c(Nt[1,2], rep(NA,timesteps-1)) #will save egg production here, this will be the input in BH
+  # recruits = c(initial_eggs, rep(0, timesteps-1)) #will save recruits here (output from BH)
+
+  # below is code that is slightly modified, old code is above. 
   Nt[,1] = N0 #Put in initial values
   Nt[,2] = A %*% Nt[,1]  # multiply initial age vector with Leslie to get 2nd age vector
-  eggs = c(Nt[1,2], rep(NA,timesteps-1)) #will save egg production here, this will be the input in BH
-  recruits = c(initial_eggs, rep(0, timesteps-1)) #will save recruits here (output from BH)
- 
+  eggs = c(initial_eggs, rep(NA,timesteps-1)) #will save egg production here, this will be the input in BH
+  recruits0 = eggs[1]/( (1/alpha) + (eggs[1]/beta) )
+  recruits = c(recruits0, rep(0, timesteps-1)) #will save recruits here (output from BH)
+  
     for(t in 1:(timesteps-2)){ #step through time
       #Save egg production, this is new number of age 1 individuals
       eggs[t+1] = Nt[1,t+1] 
@@ -53,4 +60,5 @@ sim_model <- function(A,timesteps,alpha,beta,sig_r,initial_eggs) {
 }
 
 # ===================================================================
+
 
