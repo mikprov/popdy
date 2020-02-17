@@ -1656,7 +1656,7 @@ eigendata1$kval <- as.factor(eigendata1$kval)
 vardat1 <- vardat %>%
   filter(kval %in% selectedkvals) %>%
   select(codNames,kval,variance,codNames_plot)
-rm(eigendata1)
+#rm(eigendata1)
 
 # join dfs
 totvar.e1.df <- right_join(vardat1,eigendata1,by=c("codNames","kval"))
@@ -1672,10 +1672,10 @@ fig5a <- ggplot(data=totvar.e1.df,aes(x=value_e1,y=variance)) +
                   na.rm = TRUE) +
   theme_bw() + 
   theme(panel.grid.minor = element_blank(), 
-        axis.line = element_line(colour = "black"),
-        axis.title.y = element_text(angle = 0)) +
+        axis.line = element_line(colour = "black")) + #,axis.title.y = element_text(angle = 0)) +
   #ylab("Amount of low frequency variance") +
-  ylab(expression(paste(frac(sigma,"m")))) +
+  #ylab(expression(paste("Rerecruitment variance ",frac(sigma,"m")))) +
+  ylab(expression(paste("Rerecruitment variance ","(",sigma,"/",mu,")"))) +
   xlab(expression(paste(lambda[1]))) 
 
 
@@ -1730,7 +1730,7 @@ fig5b <- ggplot(data=AUC_e12,aes(x=value_e12,y=value)) +
 # rm(n,dd)
 #ylab(expression(paste(abs(lambda[2])/lambda[1]))) +
 #ylim(0.5,1.01)
-tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig5ab_eigens_vs_simoutput_sigR0.3_span1.5_oneoverpeakhighfreq_V2.tiff', units="in", width=6, height=7, res=300) 
+tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig5ab_eigens_vs_simoutput_sigR0.3_span1.5_oneoverpeakhighfreq_V3.tiff', units="in", width=6, height=7, res=300) 
 #p12 <- list(p1,p2)
 #do.call(grid.arrange,c(p12,ncol=1))
 grid.newpage()
