@@ -280,11 +280,11 @@ lambda12 <- ggplot(eigendata[eigendata$eigen=="e12" & eigendata$kvals %in% selec
         axis.title.y = element_text(angle = 0),
         axis.text.x = element_text(angle = 40, hjust = 1)) +
   ylab("b") +
-  xlab("Spawning biomass distribution CV") +
+  xlab("Spawning biomass distribution Stdev") +
   ylab(expression(paste(frac(abs(lambda[2]),lambda[1])))) 
 
 
-tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig3_ab_adjustLEP_MAXAGE_&_CV.tiff', units="in", width=6, height=7, res=300)
+tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig3_ab_adjustLEP_Max_&_CV.tiff', units="in", width=6, height=7, res=300)
 grid.newpage()
 grid.draw(rbind(ggplotGrob(lambda1), ggplotGrob(lambda12), size = "last"))
 dev.off()
@@ -1429,6 +1429,7 @@ vardat$codNames_plot <- eigentable[match(vardat$codNames,eigentable$codNames),"c
 vardat$cvs <- eigentable[match(vardat$codNames,eigentable$codNames),"cvs_mode"]
 vardat$maxage <- eigentable[match(vardat$codNames,eigentable$codNames),"max_ages"]
 vardat$codNames_plot_no_maxage <- paste(vardat$codNames_plot,"(",vardat$maxage,")",sep="")
+vardat$sd <- eigentable[match(vardat$codNames,eigendata$codNames),"sd_mode"]
 #vardat$peakovermax <- round(vardat$peak/vardat$maxage,digits=2)
 #vardat$codNames_plot_no_peakovermax <- paste(vardat$codNames_plot,"(",vardat$peakovermax," p/m)",sep="")
 
@@ -1579,7 +1580,7 @@ head(vardat)
 # # ************************
 
 
-fig5bFractionHIGH <- ggplot(data=AUCdat[AUCdat$alphaval %in% alphas & AUCdat$AUCdes=="per_high",],
+fig4bFractionHIGH <- ggplot(data=AUCdat[AUCdat$alphaval %in% alphas & AUCdat$AUCdes=="per_high",],
                             aes(x=kval,y=codNames_plot_no)) + 
   geom_raster(aes(fill=value)) + 
   xlab("Slope on egg-recruit curve at equilibrium (k)") + ylab("") + 
@@ -1602,8 +1603,8 @@ max(AUCdat[AUCdat$cvs==min(AUCdat[AUCdat$AUCdes=="per_high",]$cvs),]$value)
 min(AUCdat[AUCdat$cvs==max(AUCdat[AUCdat$AUCdes=="per_high",]$cvs),]$value)
 max(AUCdat[AUCdat$cvs==max(AUCdat[AUCdat$AUCdes=="per_high",]$cvs),]$value)
 
-fig5aTotalVar <- ggplot(data=vardat[vardat$alphaval%in% alphas,],
-                   aes(x=kval,y=codNames_plot_no)) + 
+fig4aTotalVar <- ggplot(data=vardat[vardat$alphaval%in% alphas,],
+                   aes(x=kval,y=codNames_plot_no_maxage)) + 
   geom_raster(aes(fill=variance)) + 
   xlab("Slope on egg-recruit curve at equilibrium (k)") + ylab("") + 
   scale_fill_gradient(low="purple", high="orange") + 
@@ -1625,19 +1626,46 @@ max(vardat[vardat$kval==0.15,]$variance)
 min(vardat[vardat$kval==0.85,]$variance)
 max(vardat[vardat$kval==0.85,]$variance)
 
-tiff(file="C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig4ab_totalvar_fracHigh.tiff",
+tiff(file="C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig4ab_totalvar_fracHigh_v1.tiff",
      units="in", width=9, height=6, res=300)
      
 grid.newpage()
 #grid.draw(cbind(ggplotGrob(fig5bHIGH), ggplotGrob(fig5bLOW), size = "first"))
-grid.draw(cbind(ggplotGrob(fig5aTotalVar), ggplotGrob(fig5bFractionHIGH)))
+grid.draw(cbind(ggplotGrob(fig4aTotalVar), ggplotGrob(fig4bFractionHIGH)))
 #f <- list(fig5aLOW,fig5bHIGH)
 #do.call(grid.arrange,c(f,ncol=2))
 dev.off()
 
+# Testing new figure: 4 panel plot
+# panels = k values
+# xaxis = max age
+# yaxis = CV in recruitment time series
+head(vardat)
+newfigtest <- ggplot(vardat[vardat$kval %in% selectedkvals,],
+                  aes(x=sd,y=variance)) +
+  geom_point() + 
+  geom_smooth(method="lm",se=FALSE,color="black") +
+  facet_grid(. ~ kval) +
+  #scale_y_continuous(limits=c(0.6,1)) +
+  geom_text_repel(data=vardat[vardat$kval %in% selectedkvals,],
+                  aes(label = codNames_plot),
+                  segment.color = "grey",
+                  size = 2,
+                  na.rm = TRUE) +
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.title.y = element_text(angle = 90),
+        axis.text.x = element_text(angle = 40, hjust = 1)) +
+  ylab("Total variance in recruitment time series") +
+  xlab("Spawning distrition Stdev") 
+tiff(file="C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/recruitCV_vs_maxage_byKvals.tiff",
+     units="in", width=9, height=6, res=300)
+newfigtest
+dev.off()
 
 # **********************************
-# Figure 5
+# Figure 5 -- don't include in manuscript
 # Fig5a: lambda1 v total variance 
 # Fig5b: lambda2/1 v fraction high freq var
 # **********************************
