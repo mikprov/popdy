@@ -15,6 +15,7 @@ library(tidyverse)
 library(stargazer)
 library(RColorBrewer)
 library(ggrepel)
+library(plotly)
 
 
 # ---
@@ -111,7 +112,7 @@ for (i in 1:length(codNames)){ #for each pop i
     # max fecundity values
     maxfec[k] <- max(Leslieout$A[1,])
     
-    # LEP for this popualtion with the two mortality estimates
+    # LEP for this popualtion 
     LEP = sum(Leslieout$NEAR[["egg_production"]])
     LEPs[k] = LEP
     
@@ -121,30 +122,15 @@ for (i in 1:length(codNames)){ #for each pop i
     for(a in 1:maxage){term[a] <- newfs[a]*Leslieout$NEAR$Survship[a]}
     newLEP[k] <- sum(term) #if you plot 'term', it's the spawning distribution over age
     
-    #[OLD WAY] Matrix for simulations analysis: adjust fecundities by multiplying 15/(current LEP) 
-    #Leslieout$A[1,] <- Leslieout$A[1,]*(15/LEP)*kvals[k]
-    #Lesliearray[,,k] = Leslieout$A 
-    
     # Matrix for simulations analysis: adjust fecundities  
     Jacobian.sim[1,] <- (Jacobian.sim[1,]/(LEP*adjFec))
     Lesliearray[,,k] = Jacobian.sim
     
     # Matrix for eigenvalue analysis: relative fecundities at age
     Leslie_eigens <- Jacobian.eig
-    #Leslie_eigens[1,] <- Leslie_eigens[1,]*kvals[k] # f*k
-    #Leslie_eigens[1,] <- (Leslie_eigens[1,]/sum(Leslie_eigens[1,]))*kvals[k] # rel-f*k
-    #Leslie_eigens[1,] <- Leslie_eigens[1,]*(1/LEP)*kvals[k] # f*(1/LEP)*k
-    #Leslie_eigens[1,] <- (Leslie_eigens[1,])*(15/LEP)*kvals[k] # f*(15/LEP)*k
-    #Leslie_eigens[1,] <- (Leslie_eigens[1,])*(30/LEP)*kvals[k] # f*(15/LEP)*k
-    
-    ## move survivals to top row, set sub-diag=1
-    #Leslie_eigens[1,] <- Leslie_eigens[1,]*Leslie_eigens[2,1]
-    #Leslie_eigens[Leslie_eigens == Leslie_eigens[2,1]] <- 1 # suvivals on subdiagonal = 1 (only works if no fishing)
-    #Leslie_eigens[1,] <- Leslie_eigens[1,]/sum(Leslie_eigens[1,])*kvals[k]
-    #Lesliearray[,,k] = Leslie_eigens
     Leslie_eigens[1,] <- (Leslie_eigens[1,]/(LEP*adjFec))*kvals[k]
-    #Leslie_eigens[1,] <- (Leslie_eigens[1,])*kvals[k]
     
+    # Sum of adjusted fecundities at each slope value
     toprowsum[k] <- sum(Leslie_eigens[1,])
     
     # Eigenvalues of matrix with real eigenvalues
@@ -154,7 +140,9 @@ for (i in 1:length(codNames)){ #for each pop i
     }
   # store max fec values
   maxfecunds[,i] <- maxfec
+  # store vector of LEP values at different k values for population i
   LEPvals[,i] <- LEPs
+  # store 
   toprowsums[,i] <- toprowsum
   newLEPs[,i] <- newLEP # newLEPs should be a matrix of all 2s
   # store Leslie matrices
@@ -194,6 +182,41 @@ eigendata$peak <- eigentable[match(eigendata$codNames,eigentable$codNames),"mode
 eigendata$cvs <- eigentable[match(eigendata$codNames,eigentable$codNames),"cvs_mode"]
 eigendata$sd <- eigentable[match(eigendata$codNames,eigentable$codNames),"sd_mode"]
 head(eigendata)
+
+# -----
+# New Figure: 3D contour plot
+# x = kvals, y = longevity, z = lambda1
+# step 1: reformat eigendata into matrix so that rows=maxage, cols=kvals, elements=lambda1
+d3d <- eigendata[eigendata$eigen=="e1",] 
+head(d3d)
+lambda_1 <- d3d %>% select(kvals,value,maxage) %>% 
+  group_by(kvals,maxage) %>% summarise(avg=mean(value)) %>%
+  spread(key=kvals,value=avg) #cols=kvals
+lambda_1 <- as.matrix(lambda_1[,-1])
+fig <- plot_ly(z = ~lambda_1)
+fig <- fig %>% add_surface()
+axx <- list(title = "k")
+axy <- list(  title = "Longevity")
+axz <- list(  title = "lambda1")
+fig <- fig %>% layout(scene = list(xaxis=axx,yaxis=axy,zaxis=axz))
+fig
+str()
+
+d3d <- eigendata[eigendata$eigen=="e12",] 
+head(d3d)
+lambda_12 <- d3d %>% select(kvals,value,maxage) %>% 
+  group_by(kvals,maxage) %>% summarise(avg=mean(value)) %>%
+  spread(key=kvals,value=avg) #cols=kvals
+lambda_12 <- as.matrix(lambda_12[,-1])
+fig <- plot_ly(z = ~lambda_12)
+fig <- fig %>% add_surface()
+axx <- list(title = "k")
+axy <- list(  title = "Longevity")
+axz <- list(  title = "lambda12")
+fig <- fig %>% layout(scene = list(xaxis=axx,yaxis=axy,zaxis=axz))
+fig
+
+# -----
 
 # -----
 # use the code below to add 
@@ -290,9 +313,43 @@ grid.draw(rbind(ggplotGrob(lambda1), ggplotGrob(lambda12), size = "last"))
 dev.off()
 rm(p,lambda1,lambda12)
 
+# *************************************** #
+# (Fig 1a:schematic) Cartoon version of Fig2 in Botsford et al 2014
+# *************************************** #
+BH <- function(alpha,beta,E){ E/((1/alpha)+(E/beta))}
+a = c(2.07)
+b = 1000 # beta
+ee <- seq(from=0,to=b,by=b/1000) #range of egg values
+# simulated BH curve data for cartoon
+rr <- BH(alpha=a,beta=b,E=ee)
+curve_for_cartoon <- data.frame(cbind(ee,rr))
+
+# simulate recruits at two egg levels w/noise
+BHnoise <- function(alpha,beta,E,env){(E*exp(env))/((1/alpha)+(E/beta))}
+noise <- rnorm(n=length(ee),mean=0,sd=0.3)
+eelow <- 200*exp(noise) #timeseries of low eggs with noise
+eehigh <- 900*exp(noise) #timeseries of high eggs with noise
+rrlow <- BHnoise(alpha=a,beta=b,E=200,env=noise)
+rrhigh <- BHnoise(alpha=a,beta=b,E=900,env=noise)
+data_for_lowhigh <- data.frame(cbind(eelow,eehigh,rrlow,rrhigh))
+data_for_lowhigh$year <- seq(from=1,to=length(data_for_lowhigh[,1]),by=1)
+plot(data_for_lowhigh$rrlow,type="l")
+ggplot(data=data_for_lowhigh,aes(x=year,y=rrhigh)) + 
+  geom_line() +
+  geom_line(data=data_for_lowhigh,aes(x=year,y=rrlow))
+
+tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig1a_schematic.tiff', units="in", width=4, height=4, res=300)
+
+ggplot(data=data_for_cartoon,aes(x=ee,y=rr)) + geom_line() +
+  theme_classic() + 
+  ylab("Recruits") + xlab("Egg production") +
+  xlim(c(0,1100)) +
+  ylim(c(0,900)) +
+  theme(legend.position = "none") 
+dev.off()
 
 # *************************************** #
-# (Fig 1:schematic) Choose alpha values, plot BH curves
+# (Fig 1b:schematic) Choose alpha values, plot BH curves
 # *************************************** #
 # In my analysis I want to evaluate population spectra when
 # populations sit on different slopes of the BH curve. 
@@ -302,10 +359,6 @@ rm(p,lambda1,lambda12)
 # Since LEP is 1 for all populations, equilibrium occurs where
 # recruits = egg production (where the 1:1 line crosses the BH.
 
-# For each alpha value, plot the BH curve and the 1:1 line
-BH <- function(alpha,beta,E){ E/((1/alpha)+(E/beta))}
-
-a = seq(from=0.97,to=10,by=0.01) #alpha values
 a = c(5.51,2.07,1.38,0.97)
 b = 1000 # beta
 ee <- seq(from=0,to=b,by=b/10000) #range of egg values
@@ -360,6 +413,7 @@ LEPlineslope = round(1/conLEP,digits=2)
 top <- ggplot(data=RvElong_forplotting,aes(x=eggs,y=value,linetype=alpha)) + geom_line() +
   geom_dl(aes(label=alpha),method="last.points") +
   xlim(c(0,1100)) +
+  ylim(c(0,900)) +
   geom_abline(intercept=0, slope=LEPlineslope, color="black",size=1) + theme_classic() + 
   ylab("Recruits") + xlab("Egg production") +
   geom_point(aes(x=interpt,y=LEPlineslope*interpt,group=alpha),size=3) +
@@ -738,6 +792,8 @@ specdatalong$cvs <- eigentable[match(specdatalong$codNames,eigentable$codNames),
 specdatalong$cvs <- round(specdatalong$cvs,digits=2)
 str(specdatalong)
 rm(recsm)
+
+
 # *************************************** #
 # (6) Plot spectral analysis 
 # *************************************** #
@@ -1473,6 +1529,18 @@ min.var.k0.15 <- min(vardat[vardat$kval == 0.15,]$variance)
 max.var.k0.85 <- max(vardat[vardat$kval == 0.85,]$variance)
 min.var.k0.85 <- min(vardat[vardat$kval == 0.85,]$variance)
 head(vardat)
+
+# -----
+# New Figure: 3D plot of variance, k, and maxage
+d3dvar <- vardat %>% select(variance, kval, maxage) %>% group_by(kval,maxage) %>% summarise(avg=mean(variance)) %>%  spread(key=kval,value=avg)
+d3dvar <- as.matrix(d3dvar[,-1])
+rownames(d3dvar) <- sort(unique(vardat$maxage))
+colnames(d3dvar) <- sort(unique(vardat$kval))
+fig <- plot_ly(z = ~d3dvar)
+fig <- fig %>% add_surface()
+
+fig
+
 
 # # ************************
 # # Average pops with same peak age in vardat & AUCdat
