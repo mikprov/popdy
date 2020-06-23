@@ -462,6 +462,93 @@ rm(top)
 # rm(y1,y2,x1,x2,slopes_to_plot,df,dd,b,a,ee,rr)
 
 
+
+# *************************************** #
+# (2.5) Probably of extinction
+# *************************************** #
+# Choose one Leslie matrix from the 3d arrays
+# There is a different L matrix for each alpha (or kval)
+# Simulate populations with enough noise so that sometimes they go extinct
+# Potential problem: the same noise signal will cause some pops to immediately 
+# crash but others might every go extinct. 
+
+# -- set up parms --
+timesteps = 100 
+beta = 500
+sig_r = 7
+nreps=100
+#output.3d.list <- as.list(rep(NA,length=length(codNames))) #store timeseries here
+#names(output.3d.list) <- codNames
+# choosen alpha and kvals:
+aindex <- 9
+alphas[aindex]
+kvals[aindex]
+
+# -- generate noise time series reps --
+noisedf <- matrix(NA,nrow=timesteps,nrow=nreps)
+
+# -- simulate pop time series reps --
+pE <- as.data.frame(rep(NA,length=length(Aarray))) #store prob of extinction for each pop here
+colnames(pE) <- c("probE")
+for (i in 1:length(Aarray)) { #step through each pop
+  Leslie3d = Aarray[[i]] #select the 3d array of Leslie matricies
+  
+  # calculate 10% of original Nsize
+  maxage = length(Leslie3d[,,aindex][,1])
+  #N0 = rep((beta/maxage),length=maxage)
+  quasiE = 0.1*(sum(rep((beta/maxage),length=maxage)))
+  
+  # store replicate time series for one pop (each time series is 100 long)
+  # columns = different time series replicates
+  output.matrix <- matrix(data=NA,nrow=timesteps,ncol=nreps)
+  goes.extinct <- rep(NA,length=100)
+  
+  for (t in 1:nreps) { #generate time series replicates
+    output = sim_model_pE(A=Leslie3d[,,aindex], timesteps=timesteps, 
+                          alpha=alphas[aindex], beta=beta, 
+                          sig_r=sig_r, initial_eggs=beta, noise=noisedf[])
+    output.matrix[,t] <- output$Nsize
+    #print(t)
+  }
+  
+  # for each time series replicate, see if at any point pop size < quasiE
+  for (t in 1:100) {
+    goes.extinct[t] <- sum(output.matrix[,t] < quasiE)
+  }
+  
+  # store the fraction of replicates the pop goes extinct 
+  pE$probE[i] <- sum(goes.extinct > 0)/100
+  print(i)
+  #matplot(output.matrix,type="l",ylim=c(0,5000))
+  #plot(output.matrix[,t],type="l")
+  #abline(h=quasiE)
+  rm(output.matrix,output,maxage,quasiE,t,Leslie3d,goes.extinct)
+}
+rm(i) #clean up
+pE <- cbind(pE,as.data.frame(names(Aarray)))
+colnames(pE) <- c("probE","codNames")
+eigentable$probE <- pE[match(eigentable$codNames,pE$codNames),"probE"]
+pEdf <- eigentable
+pEdf$codNames_plot_maxage <- paste(pEdf$codNames_plot,"(",pEdf$max_ages,")",sep="")
+pEdf$codNames_plot_maxage <- as.character(pEdf$codNames_plot_maxage)
+pEdf$codNames_plot_maxage <- factor(pEdf$codNames_plot_maxage,levels=pEdf[order(pEdf$max_ages),]$codNames_plot_maxage)
+pEdf$codNames_plot_cv <- paste(pEdf$codNames_plot,"(",round(pEdf$cvs_mode,digits=2),")",sep="")
+pEdf$codNames_plot_cv <- as.character(pEdf$codNames_plot_cv)
+pEdf$codNames_plot_cv <- factor(pEdf$codNames_plot_cv,levels=pEdf[order(pEdf$cvs_mode),]$codNames_plot_cv)
+pEdf$codNames_plot_peak <- paste(pEdf$codNames_plot,"(",round(pEdf$mode_age,digits=2),")",sep="")
+pEdf$codNames_plot_peak <- as.character(pEdf$codNames_plot_peak)
+pEdf$codNames_plot_peak <- factor(pEdf$codNames_plot_peak,levels=pEdf[order(pEdf$mode_age),]$codNames_plot_peak)
+                                
+ggplot(data=pEdf,aes(x=codNames_plot_peak,y=probE)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  xlab("Population (peak spawning age)") +
+  ylab("Probability of quasi-extinction (<10%)") 
+  
+
+
 # *************************************** #
 # (3) Simulate pops. Loop over Aarray list to simulate using different Leslie matrices 
 # *************************************** #
@@ -1533,13 +1620,37 @@ head(vardat)
 # -----
 # New Figure: 3D plot of variance, k, and maxage
 d3dvar <- vardat %>% select(variance, kval, maxage) %>% group_by(kval,maxage) %>% summarise(avg=mean(variance)) %>%  spread(key=kval,value=avg)
+head(d3dvar)
 d3dvar <- as.matrix(d3dvar[,-1])
-rownames(d3dvar) <- sort(unique(vardat$maxage))
-colnames(d3dvar) <- sort(unique(vardat$kval))
+#rownames(d3dvar) <- sort(unique(vardat$maxage))
+#colnames(d3dvar) <- sort(unique(vardat$kval))
 fig <- plot_ly(z = ~d3dvar)
 fig <- fig %>% add_surface()
-
+axx <- list(title = "k")
+axy <- list(  title = "Maximum age (years)")
+axz <- list(  title = "Recruitment CV")
+fig <- fig %>% layout(scene = list(xaxis=axx,yaxis=axy,zaxis=axz))
 fig
+# save output
+htmlwidgets::saveWidget(as_widget(fig),file="C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig4a_3d_v2.html")
+# manually save jpeg from default view
+
+# New Figure: 3D plot of high frequency variance, k, and maxage
+dAUCdat <- AUCdat[AUCdat$alphaval %in% alphas & AUCdat$AUCdes=="per_high",]
+head(dAUCdat)
+dperplot <- dAUCdat %>% select(kval,value,cvs) %>% group_by(kval,cvs) %>% summarise(avg=mean(value)) %>% spread(key=kval,value=avg) 
+head(dperplot)
+dperplot <- as.matrix(dperplot[,-1])
+fig <- plot_ly(z = ~dperplot)
+fig <- fig %>% add_surface()
+axx <- list(title = "k")
+axy <- list(  title = "Spawning biomass CV")
+axz <- list(  title = "High frequency variance")
+fig <- fig %>% layout(scene = list(xaxis=axx,yaxis=axy,zaxis=axz))
+fig
+# save output
+htmlwidgets::saveWidget(as_widget(fig),file="C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig4b_3d_v2.html")
+# manually save jpeg from default view
 
 
 # # ************************
