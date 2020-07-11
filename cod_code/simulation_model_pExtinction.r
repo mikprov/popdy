@@ -1,7 +1,17 @@
 # Simulate populations with the goal of calculating probability of extinction
 # Beverton Holt recruitment 
 
+
+
 sim_model_pE <- function(A,timesteps,alpha,beta,sig_r,initial_eggs,noise) {
+  # alpha = parm in BH
+  # beta = parm in BH
+  # sig_r = standard deviation of annual recruitment
+  # A = Leslie matrix
+  # timesteps = the length of time series to be generated
+  # initial_eggs = starting number of eggs, value in first age of age vector at t=1
+  # noise = a vector of noise values, should be as long as timesteps value
+  
   age_at_mat <- min(which(!A[1,] ==0)) # set inequality to min threshold for maturity
   maxage = length(A[,1])
   ages = length(seq(1,maxage,by=1))

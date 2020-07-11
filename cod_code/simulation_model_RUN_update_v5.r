@@ -473,28 +473,32 @@ rm(top)
 # crash but others might every go extinct. 
 
 # -- set up parms --
-timesteps = 100 
+timesteps = 100 # length of each time series
 beta = 500
-sig_r = 7
-nreps=100
+sig_r = 20
+nreps=100 # number of time series replicates for each pop
+
 #output.3d.list <- as.list(rep(NA,length=length(codNames))) #store timeseries here
 #names(output.3d.list) <- codNames
-# choosen alpha and kvals:
-aindex <- 9
+
+aindex <- 9 # choosen alpha and kvals:
 alphas[aindex]
 kvals[aindex]
 
-# -- generate noise time series reps --
-noisedf <- matrix(NA,nrow=timesteps,nrow=nreps)
+# -- generate noise values (use same values for all pops) --
+set.seed(30)
+noisedf <- matrix(data=rnorm(n=(timesteps*nreps),mean=0,sd=1),nrow=timesteps,ncol=nreps) 
 
 # -- simulate pop time series reps --
 pE <- as.data.frame(rep(NA,length=length(Aarray))) #store prob of extinction for each pop here
 colnames(pE) <- c("probE")
+
 for (i in 1:length(Aarray)) { #step through each pop
   Leslie3d = Aarray[[i]] #select the 3d array of Leslie matricies
   
   # calculate 10% of original Nsize
   maxage = length(Leslie3d[,,aindex][,1])
+  
   #N0 = rep((beta/maxage),length=maxage)
   quasiE = 0.1*(sum(rep((beta/maxage),length=maxage)))
   
@@ -506,7 +510,7 @@ for (i in 1:length(Aarray)) { #step through each pop
   for (t in 1:nreps) { #generate time series replicates
     output = sim_model_pE(A=Leslie3d[,,aindex], timesteps=timesteps, 
                           alpha=alphas[aindex], beta=beta, 
-                          sig_r=sig_r, initial_eggs=beta, noise=noisedf[])
+                          sig_r=sig_r, initial_eggs=beta, noise=noisedf[,t])
     output.matrix[,t] <- output$Nsize
     #print(t)
   }
