@@ -16,6 +16,7 @@ library(stargazer)
 library(RColorBrewer)
 library(ggrepel)
 library(plotly)
+library(cowplot)
 
 
 # ---
@@ -24,6 +25,9 @@ source("C:/Users/Mikaela/Documents/GitHub/popdy/cod_code/simulation_model_cod_v3
 
 # load functions --> ***** CHECK for MG or MP *****
 source("C:/Users/Mikaela/Documents/GitHub/popdy/cod_code/2_cod_functions.r")
+
+# load probability of extinction function
+source("C:/Users/Mikaela/Documents/GitHub/popdy/cod_code/simulation_model_pExtinction.r")
 
 # load peak spawning age info
 eigentable = read.csv("C:/Users/Mikaela/Documents/GitHub/popdy/cod_code/mikaelaLSB/eigentable_MM.csv",
@@ -175,47 +179,49 @@ e1long <- eigenvals1 %>% mutate(kvals=kvals) %>% gather("codNames","value",1:16)
 e2long <- eigenvals2 %>% mutate(kvals=kvals) %>% gather("codNames","value",1:16) %>% mutate(eigen="e2")
 e12long <- eigenvals12 %>% mutate(kvals=kvals) %>% gather("codNames","value",1:16) %>% mutate(eigen="e12")
 eigendata <- rbind(e1long,e2long,e12long)
+rm(e1long,e2long,e12long)
 
 # fill in peak, max, sd, cvs in eigendata
 eigendata$maxage <- eigentable[match(eigendata$codNames,eigentable$codNames),"max_ages"]
 eigendata$peak <- eigentable[match(eigendata$codNames,eigentable$codNames),"mode_age"]
 eigendata$cvs <- eigentable[match(eigendata$codNames,eigentable$codNames),"cvs_mode"]
 eigendata$sd <- eigentable[match(eigendata$codNames,eigentable$codNames),"sd_mode"]
+eigendata$codNames_plot <- eigentable[match(eigendata$codNames,eigentable$codNames),"codNames_plot"]
 head(eigendata)
 
 # -----
 # New Figure: 3D contour plot
 # x = kvals, y = longevity, z = lambda1
 # step 1: reformat eigendata into matrix so that rows=maxage, cols=kvals, elements=lambda1
-d3d <- eigendata[eigendata$eigen=="e1",] 
-head(d3d)
-lambda_1 <- d3d %>% select(kvals,value,maxage) %>% 
-  group_by(kvals,maxage) %>% summarise(avg=mean(value)) %>%
-  spread(key=kvals,value=avg) #cols=kvals
-lambda_1 <- as.matrix(lambda_1[,-1])
-fig <- plot_ly(z = ~lambda_1)
-fig <- fig %>% add_surface()
-axx <- list(title = "k")
-axy <- list(  title = "Longevity")
-axz <- list(  title = "lambda1")
-fig <- fig %>% layout(scene = list(xaxis=axx,yaxis=axy,zaxis=axz))
-fig
-str()
-
-d3d <- eigendata[eigendata$eigen=="e12",] 
-head(d3d)
-lambda_12 <- d3d %>% select(kvals,value,maxage) %>% 
-  group_by(kvals,maxage) %>% summarise(avg=mean(value)) %>%
-  spread(key=kvals,value=avg) #cols=kvals
-lambda_12 <- as.matrix(lambda_12[,-1])
-fig <- plot_ly(z = ~lambda_12)
-fig <- fig %>% add_surface()
-axx <- list(title = "k")
-axy <- list(  title = "Longevity")
-axz <- list(  title = "lambda12")
-fig <- fig %>% layout(scene = list(xaxis=axx,yaxis=axy,zaxis=axz))
-fig
-
+# d3d <- eigendata[eigendata$eigen=="e1",] 
+# head(d3d)
+# lambda_1 <- d3d %>% select(kvals,value,maxage) %>% 
+#   group_by(kvals,maxage) %>% summarise(avg=mean(value)) %>%
+#   spread(key=kvals,value=avg) #cols=kvals
+# lambda_1 <- as.matrix(lambda_1[,-1])
+# fig <- plot_ly(z = ~lambda_1)
+# fig <- fig %>% add_surface()
+# axx <- list(title = "k")
+# axy <- list(  title = "Longevity")
+# axz <- list(  title = "lambda1")
+# fig <- fig %>% layout(scene = list(xaxis=axx,yaxis=axy,zaxis=axz))
+# fig
+# 
+# d3d <- eigendata[eigendata$eigen=="e12",] 
+# head(d3d)
+# lambda_12 <- d3d %>% select(kvals,value,maxage) %>% 
+#   group_by(kvals,maxage) %>% summarise(avg=mean(value)) %>%
+#   spread(key=kvals,value=avg) #cols=kvals
+# lambda_12 <- as.matrix(lambda_12[,-1])
+# fig <- plot_ly(z = ~lambda_12)
+# fig <- fig %>% add_surface()
+# axx <- list(title = "k")
+# axy <- list(  title = "Longevity")
+# axz <- list(  title = "lambda12")
+# fig <- fig %>% layout(scene = list(xaxis=axx,yaxis=axy,zaxis=axz))
+# fig
+# 
+# rm(d3d,lambda_1,fig,axx,axy,axz,lambda_12)
 # -----
 
 # -----
@@ -266,50 +272,49 @@ fig
 # (Fig 3ab) Eigenvalue 4 panel plot AND Gantt plot
 # *************************************** #
 
-lambda1 <- ggplot(eigendata[eigendata$eigen=="e1" & eigendata$kvals %in% selectedkvals,],
+lambda1 <- ggplot(data=eigendata[eigendata$eigen=="e1" & eigendata$kvals %in% selectedkvals,],
                   aes(x=maxage,y=value)) +
   geom_point() + 
   geom_smooth(method="lm",se=FALSE,color="black") +
   facet_grid(. ~ kvals) +
-  scale_y_continuous(limits=c(0.6,1)) +
-  geom_text_repel(data=eigendata[eigendata$eigen=="e1"& eigendata$kvals %in% selectedkvals,],
-                  aes(label = codNames),
+  scale_y_continuous(limits=c(0.6,1.1)) +
+  geom_text_repel(
+                  aes(label = codNames_plot),
                   segment.color = "grey",
                   size = 2,
-                  na.rm = TRUE) +
+                  na.rm = TRUE,
+                  box.padding = 0.5) +
   theme_bw() + 
   theme(panel.grid.minor = element_blank(), 
         axis.line = element_line(colour = "black"),
-        axis.title.y = element_text(angle = 0),
+        axis.title.y = element_text(angle = 0,vjust=0.5),
         axis.text.x = element_text(angle = 40, hjust = 1)) +
-  ylab("a") +
   xlab("Maximum age") +
   ylab(expression(paste(lambda[1]))) 
 
-lambda12 <- ggplot(eigendata[eigendata$eigen=="e12" & eigendata$kvals %in% selectedkvals,],
+lambda12 <- ggplot(data=eigendata[eigendata$eigen=="e12" & eigendata$kvals %in% selectedkvals,],
                    aes(x=cvs,y=value)) +
   geom_point() + 
   geom_smooth(method="lm",se=FALSE,color="black") +
   facet_grid(. ~ kvals) +
-  scale_y_continuous(limits=c(0,1)) +
+  scale_y_continuous(limits=c(0,1.15)) +
   geom_text_repel(data=eigendata[eigendata$eigen=="e12"& eigendata$kvals %in% selectedkvals,],
-                  aes(label = codNames),
+                  aes(label = codNames_plot),
                   segment.color = "grey",
                   size = 2,
-                  na.rm = TRUE) +
+                  na.rm = TRUE,
+                  box.padding = 0.5) +
   theme_bw() + 
   theme(panel.grid.minor = element_blank(), 
         axis.line = element_line(colour = "black"),
-        axis.title.y = element_text(angle = 0),
+        axis.title.y = element_text(angle = 0,vjust=0.5),
         axis.text.x = element_text(angle = 40, hjust = 1)) +
-  ylab("b") +
-  xlab("Spawning biomass distribution Stdev") +
+  xlab(expression(paste("Spawning biomass distribution around peak spawning age, CV"[age]))) +
   ylab(expression(paste(frac(abs(lambda[2]),lambda[1])))) 
 
 
-tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig3_ab_adjustLEP_Max_&_CV.tiff', units="in", width=6, height=7, res=300)
-grid.newpage()
-grid.draw(rbind(ggplotGrob(lambda1), ggplotGrob(lambda12), size = "last"))
+tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig3_ab_adjustLEP_Max_&_CV.tiff', units="in", width=6, height=8, res=300)
+plot_grid(lambda1,lambda12,labels=c('a)','b)'),ncol=1)
 dev.off()
 rm(p,lambda1,lambda12)
 
@@ -326,27 +331,52 @@ curve_for_cartoon <- data.frame(cbind(ee,rr))
 
 # simulate recruits at two egg levels w/noise
 BHnoise <- function(alpha,beta,E,env){(E*exp(env))/((1/alpha)+(E/beta))}
-noise <- rnorm(n=length(ee),mean=0,sd=0.3)
+noise <- rnorm(n=length(ee),mean=0,sd=0.2)
+
 eelow <- 200*exp(noise) #timeseries of low eggs with noise
-eehigh <- 900*exp(noise) #timeseries of high eggs with noise
+eehigh <- 800*exp(noise) #timeseries of high eggs with noise
+
 rrlow <- BHnoise(alpha=a,beta=b,E=200,env=noise)
-rrhigh <- BHnoise(alpha=a,beta=b,E=900,env=noise)
+rrhigh <- BHnoise(alpha=a,beta=b,E=800,env=noise)
+
 data_for_lowhigh <- data.frame(cbind(eelow,eehigh,rrlow,rrhigh))
 data_for_lowhigh$year <- seq(from=1,to=length(data_for_lowhigh[,1]),by=1)
-plot(data_for_lowhigh$rrlow,type="l")
+
 ggplot(data=data_for_lowhigh,aes(x=year,y=rrhigh)) + 
   geom_line() +
   geom_line(data=data_for_lowhigh,aes(x=year,y=rrlow))
 
+
 tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig1a_schematic.tiff', units="in", width=4, height=4, res=300)
 
-ggplot(data=data_for_cartoon,aes(x=ee,y=rr)) + geom_line() +
+ggplot(data=curve_for_cartoon,aes(x=ee,y=rr)) + geom_line() +
+  
+  # egg & recruit data at the low side of curve
+  geom_point(data=data_for_lowhigh[data_for_lowhigh$year %in% 
+                                     seq(from=1,to=BH(alpha=a,beta=b,E=round(mean(eelow),digits=0)),by=10),],
+             aes(x=eelow,y=year),color="blue") +
+  
+  geom_line(data=data_for_lowhigh[data_for_lowhigh$year %in% 
+                                     seq(from=1,to=round(mean(eelow),digits=0),by=10),],aes(x=year,y=rrlow),color="blue") +
+  
+  # egg & recruit data at the high side of curve
+  geom_point(data=data_for_lowhigh[data_for_lowhigh$year %in% 
+                                     seq(from=1,to=BH(alpha=a,beta=b,E=round(mean(eehigh),digits=0)),by=10),],
+             aes(x=eehigh,y=year),color="blue") +
+  
+  geom_line(data=data_for_lowhigh[data_for_lowhigh$year %in% 
+                                    seq(from=1,to=round(mean(eehigh),digits=0),by=10),],aes(x=year,y=rrhigh),color="blue") +
+  
+  
   theme_classic() + 
   ylab("Recruits") + xlab("Egg production") +
   xlim(c(0,1100)) +
   ylim(c(0,900)) +
   theme(legend.position = "none") 
+
 dev.off()
+rm(data_for_cartoon,BHnoise,noise,eelow,eehigh,rrlow,
+   rrhigh,data_for_lowhigh,rr,curve_for_cartoon,a,b,ee,BH)
 
 # *************************************** #
 # (Fig 1b:schematic) Choose alpha values, plot BH curves
@@ -431,7 +461,7 @@ tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig1_
 #do.call(grid.arrange,c(plist,ncol=1))
 top
 dev.off()
-rm(top)
+rm(top,LEPlineslope,RvE,RvElong_forplotting,datalpha,i,x1,y1,x2,y2)
 
 # # -------
 # # Alternative Fig for schematic - showing one BH curve and multiple 1/LEP
@@ -472,6 +502,7 @@ rm(top)
 # Potential problem: the same noise signal will cause some pops to immediately 
 # crash but others might every go extinct. 
 
+
 # -- set up parms --
 timesteps = 100 # length of each time series
 beta = 500
@@ -481,7 +512,7 @@ nreps=100 # number of time series replicates for each pop
 #output.3d.list <- as.list(rep(NA,length=length(codNames))) #store timeseries here
 #names(output.3d.list) <- codNames
 
-aindex <- 9 # choosen alpha and kvals:
+aindex <- 5 # choosen alpha and kvals:
 alphas[aindex]
 kvals[aindex]
 
@@ -550,7 +581,7 @@ ggplot(data=pEdf,aes(x=codNames_plot_peak,y=probE)) +
         panel.background = element_blank(), axis.line = element_line(colour = "black")) +
   xlab("Population (peak spawning age)") +
   ylab("Probability of quasi-extinction (<10%)") 
-  
+rm(pE,i) 
 
 
 # *************************************** #
@@ -1113,7 +1144,7 @@ lay <- rbind(c(1,4,7,7,7),
 
 tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig2abc_example_pops.tiff',units="in", width=8, height=7, res=300) 
 grid.arrange(grobs = fig2plotlist,
-             layout_matrix = lay)
+             layout_matrix = lay, labels=c('a)','b)','c)'))
 dev.off()
 rm(pDc,pDw,pDi,pTc,pTw,pTi,sp.whole,fig2plotlist)
 
@@ -1292,7 +1323,7 @@ ggplot(plotdat[plotdat$codNames == codNames[9:16],], aes(x=freq,y=value)) +
   geom_line() + facet_grid(kval~codNames) +  scale_y_log10() +
   ggtitle("Plot 2: populations ordered by peak spawning age") 
 dev.off()
- 
+rm(plotdat)
 # plot 2: remove pops with truncated distributions (I did a visual check)
 #rmpops <- c("Coas","NE_Arctic","Kat","W_Scotland","NGulf","cod3NO","cod3M")
 #plotdatsub <- subset(plotdat, !(codNames %in% rmpops))
@@ -1435,7 +1466,11 @@ AUCdat <- rbind(AUC_amount_highdflong,
                 AUC_percent_highdflong,
                 AUC_percent_lowdflong,
                 AUC_total_dflong  )
-
+rm(AUC_amount_highdflong,
+   AUC_amount_lowdflong,
+   AUC_percent_highdflong,
+   AUC_percent_lowdflong,
+   AUC_total_dflong )
 # add columns
 #eigentable$peakovermax <- round(eigentable$mode_age / eigentable$max_ages,digits=2)
 #AUCdat$peakovermax <- eigentable[match(AUCdat$codNames,eigentable$codNames),"peakovermax"]
@@ -1523,6 +1558,36 @@ AUCdat$codNames_plot_no_maxage <- factor(AUCdat$codNames_plot_no_maxage,
 # do.call(grid.arrange,c(g,ncol=2))
 # dev.off()
 # rm(start,end,i,df,gantt1,gantt2,g)
+
+# *************************************** #
+# (Fig X) Plot pE and high freq variance
+
+# *************************************** #
+head(AUCdat)
+hold <- AUCdat[AUCdat$alphaval==0.97 & AUCdat$AUCdes=="per_high",]
+pEdf$per_high <- hold[match(pEdf$codNames,hold$codNames),"value"]
+
+tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/FigX_pE_v2_modecolor.tiff', 
+     units="in", width=5, height=4, res=300) 
+
+ggplot(data=pEdf,aes(x=per_high,y=probE,color=mode_age)) + 
+  geom_point() + 
+  geom_text_repel(data=pEdf,
+                  aes(label = codNames_plot_peak),
+                  segment.color = "grey",
+                  size = 2,
+                  na.rm = TRUE) +
+#  theme_bw() + 
+  theme_classic() +
+  guides(color=FALSE) +
+ # scale_y_log10() +
+ # xlab("Fraction of high frequency variance") +
+  xlab("Fraction of sensitivity at high frequencies") +
+  ylab("Probability of Quasi-Extinction")
+
+dev.off()
+
+
 
 
 # *************************************** #
@@ -1757,6 +1822,10 @@ htmlwidgets::saveWidget(as_widget(fig),file="C:/Users/Mikaela/Documents/GitHub/p
 # dev.off()
 # rm(fig5a_avg,fig5b_avg,fig5c_avg)
 # 
+
+
+
+
 # 
 # # ************************
 # # Plot total var at different k vals
@@ -1809,14 +1878,15 @@ max(vardat[vardat$kval==0.15,]$variance)
 min(vardat[vardat$kval==0.85,]$variance)
 max(vardat[vardat$kval==0.85,]$variance)
 
-tiff(file="C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig4ab_totalvar_fracHigh_v1.tiff",
+tiff(file="C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig4ab_totalvar_fracHigh_v2.tiff",
      units="in", width=9, height=6, res=300)
      
-grid.newpage()
+#grid.newpage()
 #grid.draw(cbind(ggplotGrob(fig5bHIGH), ggplotGrob(fig5bLOW), size = "first"))
-grid.draw(cbind(ggplotGrob(fig4aTotalVar), ggplotGrob(fig4bFractionHIGH)))
+#grid.draw(cbind(ggplotGrob(fig4aTotalVar), ggplotGrob(fig4bFractionHIGH)))
 #f <- list(fig5aLOW,fig5bHIGH)
 #do.call(grid.arrange,c(f,ncol=2))
+plot_grid(fig4aTotalVar,fig4bFractionHIGH,labels=c("a)","b)"))
 dev.off()
 
 # Testing new figure: 4 panel plot
@@ -1848,9 +1918,9 @@ newfigtest
 dev.off()
 
 # **********************************
-# Figure 5 -- don't include in manuscript
-# Fig5a: lambda1 v total variance 
-# Fig5b: lambda2/1 v fraction high freq var
+# Figure S3 -- don't include in manuscript
+# Fig S3a: lambda1 v total variance 
+# Fig S3b: lambda2/1 v fraction high freq var
 # **********************************
 
 # Plot 1
@@ -1872,7 +1942,7 @@ vardat1 <- vardat %>%
 # join dfs
 totvar.e1.df <- right_join(vardat1,eigendata1,by=c("codNames","kval"))
 
-fig5a <- ggplot(data=totvar.e1.df,aes(x=value_e1,y=variance)) +
+figS3a <- ggplot(data=totvar.e1.df,aes(x=value_e1,y=variance)) +
   geom_point() + 
   geom_smooth(method="lm",se=FALSE,color="black") +
   facet_grid(. ~ kval) +
@@ -1890,7 +1960,7 @@ fig5a <- ggplot(data=totvar.e1.df,aes(x=value_e1,y=variance)) +
   xlab(expression(paste(lambda[1]))) 
 
 
-# fig5b: fraction of high frequency variance vs 1/DR
+# figS3b: fraction of high frequency variance vs 1/DR
 # Merge AUCdat and eigendata dfs based on codNames & kval
 eigendata1 <- eigendata %>% 
   filter(kvals %in% selectedkvals & eigen=="e12") %>% 
@@ -1916,7 +1986,7 @@ head(AUC_e12)
 head(AUCdat)
 
 
-fig5b <- ggplot(data=AUC_e12,aes(x=value_e12,y=value)) +
+figS3b <- ggplot(data=AUC_e12,aes(x=value_e12,y=value)) +
   geom_point() + 
   geom_smooth(method="lm",se=FALSE,color="black") +
   facet_grid(. ~ kval) +
@@ -1941,15 +2011,55 @@ fig5b <- ggplot(data=AUC_e12,aes(x=value_e12,y=value)) +
 # rm(n,dd)
 #ylab(expression(paste(abs(lambda[2])/lambda[1]))) +
 #ylim(0.5,1.01)
-tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/fig5ab_eigens_vs_simoutput_sigR0.3_span1.5_oneoverpeakhighfreq_V3.tiff', units="in", width=6, height=7, res=300) 
-#p12 <- list(p1,p2)
-#do.call(grid.arrange,c(p12,ncol=1))
-grid.newpage()
-grid.draw(rbind(ggplotGrob(fig5a), ggplotGrob(fig5b), size = "last"))
+
+tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/figS3ab_eigens_vs_simoutput_sigR0.3_span1.5_oneoverpeakhighfreq_V4.tiff', units="in", width=6, height=7, res=300) 
+plot_grid(figS3a,figS3b,labels=c('a)','b)'),ncol=1)
+#grid.newpage()
+#grid.draw(rbind(ggplotGrob(fig5a), ggplotGrob(fig5b), size = "last"))
+
 dev.off()
-rm(fig5a,fig5b)
+rm(figS3a,figS3b)
 
 
+# **********************************
+# Figure S4 -- supplemental information
+# Fig S4a: 
+# Fig S4b: 
+# **********************************
+figS4a <- ggplot(data=pEdf,aes(x=mode_age,y=cvs_mode)) +
+  geom_point() + 
+  geom_text_repel(data=pEdf,
+                  aes(label = codNames_plot),
+                  segment.color = "grey",
+                  size = 2,
+                  na.rm = TRUE) +
+  theme_bw() + 
+  # theme(panel.grid.minor = element_blank(), 
+  #       axis.line = element_line(colour = "black"),
+  #       axis.title.y = element_text(angle = 90)) +
+  ylab(expression(atop("Coefficient of variation around", paste('peak spawning age CV'[age])))) +
+  xlab('Peak spawning age')
+
+figS4b <- ggplot(data=pEdf,aes(x=sd_mode,y=cvs_mode)) +
+  geom_point() + 
+  geom_text_repel(data=pEdf,
+                  aes(label = codNames_plot),
+                  segment.color = "grey",
+                  size = 2,
+                  na.rm = TRUE) +
+  theme_bw() + 
+  # theme(panel.grid.minor = element_blank(), 
+  #       axis.line = element_line(colour = "black"),
+  #       axis.title.y = element_text(angle = 90)) +
+  #ylab(expression('Assimilation ('*mu~ 'mol' ~CO[2]~ m^-2~s^-1*')'))
+  ylab(expression(atop("Coefficient of variation around", paste('peak spawning age CV'[age])))) +
+  xlab('Standard deviation around peak spawning age')
+  
+tiff(file='C:/Users/Mikaela/Documents/GitHub/popdy/cod_figures/manuscript3/SI/figS4ab_cv_sd_peak.tiff', units="in", width=4, height=7, res=300) 
+plot_grid(figS4a,figS4b,labels=c('a)','b)'),ncol=1)
+
+dev.off()
+rm(figS4a,figS4b)
 
 # ---------------- Extra code ------------------------ #
 # ---
