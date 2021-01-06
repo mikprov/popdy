@@ -581,7 +581,7 @@ ggplot(data=pEdf,aes(x=codNames_plot_peak,y=probE)) +
         panel.background = element_blank(), axis.line = element_line(colour = "black")) +
   xlab("Population (peak spawning age)") +
   ylab("Probability of quasi-extinction (<10%)") 
-rm(pE,i) 
+rm(pE) 
 
 
 # *************************************** #
